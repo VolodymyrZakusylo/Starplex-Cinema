@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.5.11716.220 stable
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarPlex.Domain", "StarPlex.Domain\StarPlex.Domain.csproj", "{17B0EC90-73DB-45FD-B89B-D5E9EF8913A7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarPlex.Application", "StarPlex.Application\StarPlex.Application.csproj", "{3052D498-9A29-4C54-A6A5-CB5B144B2744}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarPlex.Infrastructure", "StarPlex.Infrastructure\StarPlex.Infrastructure.csproj", "{240B0BD2-1960-490D-8E15-A7247A8FC03E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarPlex.API", "StarPlex.API\StarPlex.API.csproj", "{40BF9C08-6256-4FE7-BB3F-F14C1BBD83E9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{17B0EC90-73DB-45FD-B89B-D5E9EF8913A7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{17B0EC90-73DB-45FD-B89B-D5E9EF8913A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{17B0EC90-73DB-45FD-B89B-D5E9EF8913A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{17B0EC90-73DB-45FD-B89B-D5E9EF8913A7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3052D498-9A29-4C54-A6A5-CB5B144B2744}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3052D498-9A29-4C54-A6A5-CB5B144B2744}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3052D498-9A29-4C54-A6A5-CB5B144B2744}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3052D498-9A29-4C54-A6A5-CB5B144B2744}.Release|Any CPU.Build.0 = Release|Any CPU
+		{240B0BD2-1960-490D-8E15-A7247A8FC03E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{240B0BD2-1960-490D-8E15-A7247A8FC03E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{240B0BD2-1960-490D-8E15-A7247A8FC03E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{240B0BD2-1960-490D-8E15-A7247A8FC03E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{40BF9C08-6256-4FE7-BB3F-F14C1BBD83E9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{40BF9C08-6256-4FE7-BB3F-F14C1BBD83E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{40BF9C08-6256-4FE7-BB3F-F14C1BBD83E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{40BF9C08-6256-4FE7-BB3F-F14C1BBD83E9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

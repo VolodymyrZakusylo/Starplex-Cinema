@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  starplex-db:
+    image: postgres:16-alpine
+    container_name: starplex_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: super_secret_password_123
+      POSTGRES_DB: starplex_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - starplex_pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: starplex_mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
+volumes:
+  starplex_pg_data:
