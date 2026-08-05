@@ -342,6 +342,10 @@ __pycache__/
 # Tabs Studio
 *.tss
 
+# Local Antigravity configuration
+.agents/
+.antigravity/
+
 # Telerik's JustMock configuration file
 *.jmconfig
 
