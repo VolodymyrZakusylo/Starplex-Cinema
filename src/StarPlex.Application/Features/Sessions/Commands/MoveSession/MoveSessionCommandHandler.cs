@@ -1,4 +1,5 @@
-﻿using MediatR;
+using StarPlex.Application.Common.Exceptions;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Enums;
@@ -40,7 +41,7 @@ public class MoveSessionCommandHandler : IRequestHandler<MoveSessionCommand, boo
         var endOfWorkingDay = new DateTime(adjustedStartTime.Year, adjustedStartTime.Month, adjustedStartTime.Day, 23, 0, 0, DateTimeKind.Utc);
 
         if (adjustedStartTime < startOfWorkingDay || adjustedEndTime > endOfWorkingDay)
-            throw new InvalidOperationException("The rescheduled session falls outside the cinema's working hours (10:00 - 23:00).");
+            throw new BusinessRuleException("The rescheduled session falls outside the cinema's working hours (10:00 - 23:00).");
 
         var hasCollision = await _context.Sessions
             .AnyAsync(s => s.Id != session.Id &&
@@ -51,7 +52,7 @@ public class MoveSessionCommandHandler : IRequestHandler<MoveSessionCommand, boo
                       cancellationToken);
 
         if (hasCollision)
-            throw new InvalidOperationException("Selected time slot is already occupied by another session or its cleaning interval. Choose an empty space.");
+            throw new ConflictException("Selected time slot is already occupied by another session or its cleaning interval. Choose an empty space.");
 
         session.HallId = request.HallId;
         session.StartTime = adjustedStartTime;

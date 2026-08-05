@@ -1,4 +1,5 @@
-﻿using MediatR;
+using StarPlex.Application.Common.Exceptions;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
@@ -24,7 +25,7 @@ public class CreateCinemaCommandHandler : IRequestHandler<CreateCinemaCommand, G
 
         if (exists)
         {
-            throw new InvalidOperationException("A cinema with this name and address already exists.");
+            throw new ConflictException("A cinema with this name and address already exists.");
         }
 
         var cinema = new Cinema

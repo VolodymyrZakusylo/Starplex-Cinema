@@ -1,4 +1,5 @@
-﻿using MediatR;
+using StarPlex.Application.Common.Exceptions;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 
@@ -27,7 +28,7 @@ public class DeleteHallCommandHandler : IRequestHandler<DeleteHallCommand>
 
         if (!_currentUserService.IsSuperAdmin && _currentUserService.CinemaId != hall.CinemaId)
         {
-            throw new InvalidOperationException("У вас немає прав для видалення залів цього кінотеатру.");
+            throw new ForbiddenException("У вас немає прав для видалення залів цього кінотеатру.");
         }
 
         _context.Halls.Remove(hall);

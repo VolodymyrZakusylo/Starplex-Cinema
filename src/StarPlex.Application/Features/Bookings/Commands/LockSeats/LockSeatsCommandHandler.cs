@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
@@ -29,7 +29,7 @@ public class LockSeatsCommandHandler : IRequestHandler<LockSeatsCommand, LockSea
             throw new NotFoundException("Session", request.SessionId);
 
         if (session.Status != SessionStatus.Active)
-            throw new InvalidOperationException("Cannot lock seats for an inactive or completed session.");
+            throw new BusinessRuleException("Cannot lock seats for an inactive or completed session.");
 
         var seats = await _context.Seats
             .AsNoTracking()
@@ -37,10 +37,10 @@ public class LockSeatsCommandHandler : IRequestHandler<LockSeatsCommand, LockSea
             .ToListAsync(cancellationToken);
 
         if (seats.Count != request.SeatIds.Count)
-            throw new InvalidOperationException("Some of the selected seats do not belong to this cinema hall.");
+            throw new BusinessRuleException("Some of the selected seats do not belong to this cinema hall.");
 
         if (seats.Any(s => s.Status == SeatStatus.Inactive))
-            throw new InvalidOperationException("One or more selected seats are currently inactive due to maintenance.");
+            throw new BusinessRuleException("One or more selected seats are currently inactive due to maintenance.");
 
         var success = await _seatLockService.LockSeatsAsync(
             request.SessionId,
@@ -50,7 +50,7 @@ public class LockSeatsCommandHandler : IRequestHandler<LockSeatsCommand, LockSea
 
         if (!success)
         {
-            throw new InvalidOperationException("One or more selected seats are already locked or booked by another user.");
+            throw new ConflictException("One or more selected seats are already locked or booked by another user.");
         }
 
         await _seatHubService.NotifySeatsLockedAsync(

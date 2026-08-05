@@ -1,4 +1,5 @@
-﻿using MediatR;
+using StarPlex.Application.Common.Exceptions;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
@@ -30,7 +31,7 @@ public class CreateMovieCommandHandler : IRequestHandler<CreateMovieCommand, Gui
 
             if (movieExistsInDb)
             {
-                throw new InvalidOperationException("Цей фільм уже імпортовано в систему.");
+                throw new ConflictException("Цей фільм уже імпортовано в систему.");
             }
 
             var tmdbMovie = await _tmdbService.GetMovieDetailsAsync(request.TmdbId, cancellationToken);
@@ -64,7 +65,7 @@ public class CreateMovieCommandHandler : IRequestHandler<CreateMovieCommand, Gui
         {
             if (string.IsNullOrWhiteSpace(request.Title))
             {
-                throw new InvalidOperationException("Назва фільму є обов'язковою для ручного введення.");
+                throw new BusinessRuleException("Назва фільму є обов'язковою для ручного введення.");
             }
 
             var releaseDateUtc = request.ReleaseDate.HasValue

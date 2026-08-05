@@ -1,4 +1,5 @@
-﻿using MediatR;
+using StarPlex.Application.Common.Exceptions;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
@@ -21,7 +22,7 @@ public class CreateHallCommandHandler : IRequestHandler<CreateHallCommand, Guid>
     {
         if (!_currentUserService.IsSuperAdmin && _currentUserService.CinemaId != request.CinemaId)
         {
-            throw new InvalidOperationException("You do not have permission to manage this cinema.");
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
         }
 
         var cinemaExists = await _context.Cinemas
@@ -39,7 +40,7 @@ public class CreateHallCommandHandler : IRequestHandler<CreateHallCommand, Guid>
 
         if (hallExists)
         {
-            throw new InvalidOperationException($"Hall with name '{trimmedName}' already exists in this cinema.");
+            throw new ConflictException($"Hall with name '{trimmedName}' already exists in this cinema.");
         }
 
         var hall = new Hall(

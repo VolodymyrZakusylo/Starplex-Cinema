@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
@@ -34,7 +34,7 @@ public class CreateSessionCommandHandler : IRequestHandler<CreateSessionCommand,
 
         if (!_currentUserService.IsSuperAdmin && _currentUserService.CinemaId != hall.CinemaId)
         {
-            throw new InvalidOperationException("You do not have permission to manage this cinema.");
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
         }
 
         var movie = await _context.Movies
@@ -62,7 +62,7 @@ public class CreateSessionCommandHandler : IRequestHandler<CreateSessionCommand,
 
             if (hasCollision)
             {
-                throw new InvalidOperationException("Time slot collision detected. This hall is already occupied by another session during the specified time.");
+                throw new ConflictException("Time slot collision detected. This hall is already occupied by another session during the specified time.");
             }
 
             var session = new Session(

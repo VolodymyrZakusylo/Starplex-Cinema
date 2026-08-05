@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using StarPlex.Application.Common.Exceptions;
@@ -36,7 +36,7 @@ public class CancelSessionCommandHandler : IRequestHandler<CancelSessionCommand>
 
         if (!_currentUserService.IsSuperAdmin && _currentUserService.CinemaId != session.Hall.CinemaId)
         {
-            throw new InvalidOperationException("You do not have permission to manage this cinema.");
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
         }
 
         session.Status = SessionStatus.Cancelled;
