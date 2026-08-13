@@ -28,15 +28,11 @@ public class ExceptionMiddleware
         }
         catch (Exception exception)
         {
-            _logger.LogError(
-                exception,
-                "Unhandled exception occurred while processing request.");
-
             await HandleExceptionAsync(context, exception);
         }
     }
 
-    private static async Task HandleExceptionAsync(
+    private async Task HandleExceptionAsync(
         HttpContext context,
         Exception exception)
     {
@@ -48,6 +44,8 @@ public class ExceptionMiddleware
         {
             case FluentValidation.ValidationException validationException:
 
+                _logger.LogWarning("Validation failed: {Message}", validationException.Message);
+
                 problem = new ProblemDetails
                 {
                     Status = StatusCodes.Status400BadRequest,
@@ -55,14 +53,15 @@ public class ExceptionMiddleware
                     Detail = "One or more validation errors occurred."
                 };
 
-                problem.Extensions["errors"] =
-                    validationException.Errors
-                        .Select(e => e.ErrorMessage)
-                        .ToArray();
+                problem.Extensions["errors"] = validationException.Errors
+                    .GroupBy(e => e.PropertyName, e => e.ErrorMessage)
+                    .ToDictionary(g => g.Key, g => g.ToArray());
 
                 break;
 
             case NotFoundException notFound:
+
+                _logger.LogWarning("Resource not found: {Message}", notFound.Message);
 
                 problem = new ProblemDetails
                 {
@@ -75,6 +74,8 @@ public class ExceptionMiddleware
 
             case ConflictException conflict:
 
+                _logger.LogWarning("Conflict: {Message}", conflict.Message);
+
                 problem = new ProblemDetails
                 {
                     Status = StatusCodes.Status409Conflict,
@@ -85,6 +86,8 @@ public class ExceptionMiddleware
                 break;
 
             case BusinessRuleException business:
+
+                _logger.LogWarning("Business rule violation: {Message}", business.Message);
 
                 problem = new ProblemDetails
                 {
@@ -97,6 +100,8 @@ public class ExceptionMiddleware
 
             case UnauthorizedException unauthorized:
 
+                _logger.LogWarning("Unauthorized: {Message}", unauthorized.Message);
+
                 problem = new ProblemDetails
                 {
                     Status = StatusCodes.Status401Unauthorized,
@@ -108,6 +113,8 @@ public class ExceptionMiddleware
 
             case ForbiddenException forbidden:
 
+                _logger.LogWarning("Forbidden: {Message}", forbidden.Message);
+
                 problem = new ProblemDetails
                 {
                     Status = StatusCodes.Status403Forbidden,
@@ -117,18 +124,9 @@ public class ExceptionMiddleware
 
                 break;
 
-            case DbUpdateException:
-
-                problem = new ProblemDetails
-                {
-                    Status = StatusCodes.Status409Conflict,
-                    Title = "Database conflict.",
-                    Detail = "The operation could not be completed because of conflicting data."
-                };
-
-                break;
-
             default:
+
+                _logger.LogError(exception, "Unhandled exception occurred while processing request.");
 
                 problem = new ProblemDetails
                 {
