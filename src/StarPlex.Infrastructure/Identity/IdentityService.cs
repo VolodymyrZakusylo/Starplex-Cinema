@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Common.Models;
+using StarPlex.Application.Common.Exceptions;
 using StarPlex.Domain.Entities;
 using StarPlex.Domain.Enums;
 using StarPlex.Infrastructure.Authentication;
@@ -220,7 +221,7 @@ public class IdentityService : IIdentityService
         {
             if (!cinemaId.HasValue)
             {
-                throw new InvalidOperationException("A cinema must be specified for cinema staff.");
+                throw new BusinessRuleException("A cinema must be specified for cinema staff.");
             }
             user.CinemaId = cinemaId.Value;
         }

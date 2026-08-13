@@ -1,4 +1,5 @@
-﻿using MediatR;
+using StarPlex.Application.Common.Exceptions;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 
@@ -20,7 +21,7 @@ public class DeleteMovieCommandHandler : IRequestHandler<DeleteMovieCommand>
 
         if (movie == null)
         {
-            throw new KeyNotFoundException($"Movie with ID '{request.Id}' was not found.");
+            throw new NotFoundException("Movie", request.Id);
         }
 
         _context.Movies.Remove(movie);

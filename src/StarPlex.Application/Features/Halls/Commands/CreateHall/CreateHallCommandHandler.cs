@@ -30,7 +30,7 @@ public class CreateHallCommandHandler : IRequestHandler<CreateHallCommand, Guid>
 
         if (!cinemaExists)
         {
-            throw new KeyNotFoundException($"Cinema with ID '{request.CinemaId}' was not found.");
+            throw new NotFoundException("Cinema", request.CinemaId);
         }
 
         var trimmedName = request.Name.Trim();

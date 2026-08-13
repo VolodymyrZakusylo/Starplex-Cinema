@@ -38,7 +38,7 @@ public class CreateMovieCommandHandler : IRequestHandler<CreateMovieCommand, Gui
 
             if (tmdbMovie == null)
             {
-                throw new KeyNotFoundException($"Фільм з TMDB ID {request.TmdbId} не знадено.");
+                throw new NotFoundException("TMDB Movie", request.TmdbId);
             }
 
             var calculatedStatus = tmdbMovie.ReleaseDate > DateTime.UtcNow

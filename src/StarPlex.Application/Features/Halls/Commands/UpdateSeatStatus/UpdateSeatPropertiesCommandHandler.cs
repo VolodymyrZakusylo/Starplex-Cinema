@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using StarPlex.Application.Common.Exceptions;
@@ -121,7 +121,6 @@ public class UpdateSeatPropertiesCommandHandler : IRequestHandler<UpdateSeatProp
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync(cancellationToken);
             _logger.LogError(ex, "Failed to completely deactivate seat and process entity updates for SeatId: {SeatId}", request.SeatId);
             throw;
         }

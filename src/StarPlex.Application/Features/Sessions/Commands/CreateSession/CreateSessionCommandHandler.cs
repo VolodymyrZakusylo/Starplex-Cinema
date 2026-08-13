@@ -51,9 +51,7 @@ public class CreateSessionCommandHandler : IRequestHandler<CreateSessionCommand,
         var endTimeUtc = startTimeUtc.AddMinutes(movie.DurationInMinutes + cleanUpDuration);
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            var hasCollision = await _context.Sessions
+        var hasCollision = await _context.Sessions
                 .AsNoTracking()
                 .Where(s => s.HallId == request.HallId && s.Status == SessionStatus.Active)
                 .AnyAsync(s => s.StartTime < endTimeUtc &&
@@ -85,11 +83,5 @@ public class CreateSessionCommandHandler : IRequestHandler<CreateSessionCommand,
 
             await transaction.CommitAsync(cancellationToken);
             return session.Id;
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
     }
 }

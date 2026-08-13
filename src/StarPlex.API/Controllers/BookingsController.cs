@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -126,9 +126,7 @@ public class BookingsController : ControllerBase
     [Authorize]
     public async Task<IActionResult> DownloadTicket(Guid id, CancellationToken cancellationToken)
     {
-        try
-        {
-            var currentUserId = GetCurrentUserId();
+        var currentUserId = GetCurrentUserId();
             if (currentUserId == null) return Unauthorized();
 
             var ticketOwnerId = await _context.Tickets
@@ -142,20 +140,13 @@ public class BookingsController : ControllerBase
             var pdfBytes = await _ticketService.GenerateTicketPdfAsync(id, cancellationToken);
             string fileName = $"Ticket-{id.ToString()[..8].ToUpper()}.pdf";
             return File(pdfBytes, "application/pdf", fileName);
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Message = ex.Message });
-        }
     }
 
     [HttpGet("{bookingId}/tickets/download-all")]
     [Authorize]
     public async Task<IActionResult> DownloadAllTickets(Guid bookingId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var currentUserId = GetCurrentUserId();
+        var currentUserId = GetCurrentUserId();
             if (currentUserId == null) return Unauthorized();
 
             var booking = await _context.Bookings
@@ -182,11 +173,6 @@ public class BookingsController : ControllerBase
 
             string mergedFileName = $"StarPlex-Tickets-{bookingId.ToString()[..8].ToUpper()}.pdf";
             return File(pdfBytes, "application/pdf", mergedFileName);
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Message = $"Помилка завантаження квитків: {ex.Message}" });
-        }
     }
 
     [HttpPost("cashier-sell")]

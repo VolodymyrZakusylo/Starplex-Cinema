@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using StarPlex.Application.Common.Interfaces;
@@ -104,9 +104,8 @@ public class CancelTicketCommandHandler : IRequestHandler<CancelTicketCommand, b
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync(cancellationToken);
             _logger.LogError(ex, "Failed to execute CancelTicketCommand for TicketId: {TicketId}", request.TicketId);
-            return false;
+            throw;
         }
     }
 }

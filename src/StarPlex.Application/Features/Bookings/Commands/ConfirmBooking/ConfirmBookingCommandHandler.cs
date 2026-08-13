@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using StarPlex.Application.Common.Interfaces;
@@ -34,9 +34,7 @@ public class ConfirmBookingCommandHandler : IRequestHandler<ConfirmBookingComman
         if (_context is not DbContext dbContext) return false;
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            var booking = await _context.Bookings
+        var booking = await _context.Bookings
                 .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
                 .Include(b => b.Session).ThenInclude(s => s.Movie)
                 .Include(b => b.Session).ThenInclude(s => s.Hall)
@@ -121,11 +119,5 @@ public class ConfirmBookingCommandHandler : IRequestHandler<ConfirmBookingComman
             }
 
             return true;
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
     }
 }

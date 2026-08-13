@@ -23,7 +23,7 @@ public class UpdateHallCommandHandler : IRequestHandler<UpdateHallCommand>
 
         if (hall == null)
         {
-            throw new KeyNotFoundException($"Hall with ID '{request.Id}' was not found.");
+            throw new NotFoundException("Hall", request.Id);
         }
 
         if (!_currentUserService.IsSuperAdmin && _currentUserService.CinemaId != hall.CinemaId)

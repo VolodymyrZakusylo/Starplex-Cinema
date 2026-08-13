@@ -73,9 +73,7 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
         };
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            _context.Bookings.Add(booking);
+        _context.Bookings.Add(booking);
             await _context.SaveChangesAsync(cancellationToken);
 
             var temporaryLocks = await _context.SelectedSeats
@@ -113,11 +111,5 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
             await transaction.CommitAsync(cancellationToken);
 
             return booking.Id;
-        }
-        catch (Exception)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
     }
 }

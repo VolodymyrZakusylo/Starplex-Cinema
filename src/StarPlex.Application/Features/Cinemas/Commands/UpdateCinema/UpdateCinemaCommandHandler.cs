@@ -21,7 +21,7 @@ public class UpdateCinemaCommandHandler : IRequestHandler<UpdateCinemaCommand>
 
         if (cinema == null)
         {
-            throw new KeyNotFoundException($"Cinema with ID '{request.Id}' was not found.");
+            throw new NotFoundException("Cinema", request.Id);
         }
 
         var trimmedName = request.Name.Trim();

@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
+using StarPlex.Application.Common.Exceptions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
@@ -23,7 +24,7 @@ public class UpdateMovieCommandHandler : IRequestHandler<UpdateMovieCommand>
 
         if (movie == null)
         {
-            throw new KeyNotFoundException($"Movie with ID '{request.Id}' was not found.");
+            throw new NotFoundException("Movie", request.Id);
         }
 
         if (movie.Title != request.Title.Trim())

@@ -23,7 +23,7 @@ public class DeleteHallCommandHandler : IRequestHandler<DeleteHallCommand>
 
         if (hall == null)
         {
-            throw new KeyNotFoundException($"Hall with ID '{request.Id}' was not found.");
+            throw new NotFoundException("Hall", request.Id);
         }
 
         if (!_currentUserService.IsSuperAdmin && _currentUserService.CinemaId != hall.CinemaId)

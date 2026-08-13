@@ -112,9 +112,7 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
         if (_context is DbContext dbContext)
         {
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-            try
-            {
-                _context.Bookings.Add(booking);
+            _context.Bookings.Add(booking);
 
                 if (appliedDiscount != null)
                 {
@@ -149,12 +147,6 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
                     ClientSecret = clientSecret,
                     Message = "Booking initialized with discount and Stripe payment intent created successfully."
                 };
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw new InvalidOperationException($"Failed to initialize booking and payment: {ex.Message}", ex);
-            }
         }
 
         throw new InvalidOperationException("Database context is not compatible with transactions.");
