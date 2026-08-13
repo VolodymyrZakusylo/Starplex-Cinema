@@ -41,7 +41,7 @@ public class IdentityService : IIdentityService
         return user == null;
     }
 
-    public async Task<AuthResponse?> RegisterAsync(string email, string password, string firstName, string lastName, DateTime dateOfBirth)
+    public async Task<AuthResponse?> RegisterAsync(string email, string password, string firstName, string lastName, DateTime dateOfBirth, CancellationToken cancellationToken = default)
     {
         if (!await IsEmailUniqueAsync(email))
             return null;
@@ -58,10 +58,10 @@ public class IdentityService : IIdentityService
 
         await _userManager.AddToRoleAsync(user, UserRole.Customer.ToString());
 
-        return await GenerateAuthResponseAsync(user);
+        return await GenerateAuthResponseAsync(user, cancellationToken);
     }
 
-    public async Task<AuthResponse?> LoginAsync(string email, string password)
+    public async Task<AuthResponse?> LoginAsync(string email, string password, CancellationToken cancellationToken = default)
     {
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null) return null;
@@ -69,35 +69,35 @@ public class IdentityService : IIdentityService
         var isPasswordValid = await _userManager.CheckPasswordAsync(user, password);
         if (!isPasswordValid) return null;
 
-        return await GenerateAuthResponseAsync(user);
+        return await GenerateAuthResponseAsync(user, cancellationToken);
     }
 
-    public async Task<AuthResponse?> RefreshTokenAsync(string refreshTokenStr)
+    public async Task<AuthResponse?> RefreshTokenAsync(string refreshTokenStr, CancellationToken cancellationToken = default)
     {
         var storedToken = await _context.RefreshTokens
-            .FirstOrDefaultAsync(x => x.Token == refreshTokenStr);
+            .FirstOrDefaultAsync(x => x.Token == refreshTokenStr, cancellationToken);
 
         if (storedToken == null || !storedToken.IsActive)
             return null;
 
         storedToken.IsRevoked = true;
-        await _context.SaveChangesAsync(CancellationToken.None);
+        await _context.SaveChangesAsync(cancellationToken);
 
         var user = await _userManager.FindByIdAsync(storedToken.UserId.ToString());
         if (user == null) return null;
 
-        return await GenerateAuthResponseAsync(user);
+        return await GenerateAuthResponseAsync(user, cancellationToken);
     }
 
-    public async Task<bool> RevokeTokenAsync(string refreshTokenStr)
+    public async Task<bool> RevokeTokenAsync(string refreshTokenStr, CancellationToken cancellationToken = default)
     {
         var storedToken = await _context.RefreshTokens
-            .FirstOrDefaultAsync(x => x.Token == refreshTokenStr);
+            .FirstOrDefaultAsync(x => x.Token == refreshTokenStr, cancellationToken);
 
         if (storedToken == null) return false;
 
         storedToken.IsRevoked = true;
-        await _context.SaveChangesAsync(CancellationToken.None);
+        await _context.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -136,7 +136,8 @@ public class IdentityService : IIdentityService
         UserRole? roleFilter,
         Guid? cinemaIdFilter,
         int page,
-        int pageSize)
+        int pageSize,
+        CancellationToken cancellationToken = default)
     {
         var query = _userManager.Users.AsNoTracking();
 
@@ -167,7 +168,7 @@ public class IdentityService : IIdentityService
             }
         }
 
-        var totalCount = await query.CountAsync();
+        var totalCount = await query.CountAsync(cancellationToken);
 
         var usersDtoQuery = from user in query
                             join cinema in _context.Cinemas on user.CinemaId equals cinema.Id into cinemaJoin
@@ -186,7 +187,7 @@ public class IdentityService : IIdentityService
         var pagedUsers = await usersDtoQuery
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var userIds = pagedUsers.Select(u => u.Id).ToList();
 
@@ -195,7 +196,7 @@ public class IdentityService : IIdentityService
             join role in _context.Roles on ur.RoleId equals role.Id
             where userIds.Contains(ur.UserId)
             select new { ur.UserId, role.Name }
-        ).ToListAsync();
+        ).ToListAsync(cancellationToken);
 
         foreach (var dto in pagedUsers)
         {
@@ -240,7 +241,7 @@ public class IdentityService : IIdentityService
         return roleResult.Succeeded;
     }
 
-    private async Task<AuthResponse> GenerateAuthResponseAsync(ApplicationUser user)
+    private async Task<AuthResponse> GenerateAuthResponseAsync(ApplicationUser user, CancellationToken cancellationToken = default)
     {
         var userRoles = await _userManager.GetRolesAsync(user);
 
@@ -285,7 +286,7 @@ public class IdentityService : IIdentityService
         var refreshTokenEntity = new RefreshToken(user.Id, refreshTokenStr, DateTime.UtcNow.AddDays(7));
 
         _context.RefreshTokens.Add(refreshTokenEntity);
-        await _context.SaveChangesAsync(CancellationToken.None);
+        await _context.SaveChangesAsync(cancellationToken);
 
         return new AuthResponse
         {

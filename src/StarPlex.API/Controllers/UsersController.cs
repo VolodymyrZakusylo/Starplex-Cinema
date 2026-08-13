@@ -24,14 +24,16 @@ public class UsersController : ControllerBase
         [FromQuery] UserRole? roleFilter,
         [FromQuery] Guid? cinemaIdFilter,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10)
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
     {
         var (users, totalCount) = await _identityService.SearchUsersAsync(
             searchTerm ?? string.Empty,
             roleFilter,
             cinemaIdFilter,
             page,
-            pageSize
+            pageSize,
+            cancellationToken
         );
 
         return Ok(new PagedUserStaffResponse

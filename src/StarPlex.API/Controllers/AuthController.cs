@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Common.Models;
@@ -35,7 +35,7 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AuthResponse))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request)
+    public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request, CancellationToken cancellationToken)
     {
         var validationResult = await _registerValidator.ValidateAsync(request);
 
@@ -49,7 +49,8 @@ public class AuthController : ControllerBase
             request.Password,
             request.FirstName,
             request.LastName,
-            request.DateOfBirth);
+            request.DateOfBirth,
+            cancellationToken);
 
         if (result == null)
         {
@@ -67,7 +68,7 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AuthResponse))]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request)
+    public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {
         var validationResult = await _loginValidator.ValidateAsync(request);
 
@@ -76,7 +77,7 @@ public class AuthController : ControllerBase
             throw new ValidationException(validationResult.Errors);
         }
 
-        var result = await _identityService.LoginAsync(request.Email, request.Password);
+        var result = await _identityService.LoginAsync(request.Email, request.Password, cancellationToken);
 
         if (result == null)
         {
@@ -94,14 +95,14 @@ public class AuthController : ControllerBase
     [HttpPost("refresh-token")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AuthResponse))]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<AuthResponse>> RefreshToken([FromBody] RefreshTokenRequest request)
+    public async Task<ActionResult<AuthResponse>> RefreshToken([FromBody] RefreshTokenRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(request.RefreshToken))
         {
             return BadRequest(new { message = "Refresh token is required." });
         }
 
-        var result = await _identityService.RefreshTokenAsync(request.RefreshToken);
+        var result = await _identityService.RefreshTokenAsync(request.RefreshToken, cancellationToken);
 
         if (result == null)
         {
@@ -118,14 +119,14 @@ public class AuthController : ControllerBase
     [HttpPost("logout")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Logout([FromBody] RefreshTokenRequest request)
+    public async Task<IActionResult> Logout([FromBody] RefreshTokenRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(request.RefreshToken))
         {
             return BadRequest(new { message = "Refresh token is required." });
         }
 
-        var result = await _identityService.RevokeTokenAsync(request.RefreshToken);
+        var result = await _identityService.RevokeTokenAsync(request.RefreshToken, cancellationToken);
 
         if (!result)
         {
