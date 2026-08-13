@@ -63,11 +63,6 @@ public class CreateMovieCommandHandler : IRequestHandler<CreateMovieCommand, Gui
         }
         else
         {
-            if (string.IsNullOrWhiteSpace(request.Title))
-            {
-                throw new BusinessRuleException("Назва фільму є обов'язковою для ручного введення.");
-            }
-
             var releaseDateUtc = request.ReleaseDate.HasValue
                 ? DateTime.SpecifyKind(request.ReleaseDate.Value, DateTimeKind.Utc)
                 : DateTime.UtcNow;
@@ -78,8 +73,8 @@ public class CreateMovieCommandHandler : IRequestHandler<CreateMovieCommand, Gui
 
             movie = new Movie(
                 0,
-                request.Title.Trim(),
-                request.OriginalTitle?.Trim() ?? request.Title.Trim(),
+                request.Title!.Trim(),
+                request.OriginalTitle?.Trim() ?? request.Title!.Trim(),
                 request.Description?.Trim() ?? string.Empty,
                 request.DurationInMinutes,
                 request.PosterUrl?.Trim() ?? string.Empty,
