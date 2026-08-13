@@ -1,9 +1,10 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StarPlex.Application.Features.Users.Commands.ChangePassword;
 using StarPlex.Application.Features.Users.Commands.DeleteAccount;
 using StarPlex.Application.Features.Users.Commands.UpdateProfile;
+using StarPlex.Application.Common.Exceptions;
 using System.Security.Claims;
 
 namespace StarPlex.API.Controllers;
@@ -64,7 +65,7 @@ public class UserController : ControllerBase
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
         if (!Guid.TryParse(userIdClaim, out var userId))
         {
-            throw new UnauthorizedAccessException("User identification missing from token.");
+            throw new UnauthorizedException("User identification missing from token.");
         }
         return userId;
     }

@@ -67,8 +67,6 @@ public class CancelTicketCommandHandler : IRequestHandler<CancelTicketCommand, b
         }
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
-        {
             var refundResult = await _paymentService.RefundPaymentAsync(
                 booking.Payment.StripePaymentIntentId,
                 refundAmount,
@@ -101,11 +99,5 @@ public class CancelTicketCommandHandler : IRequestHandler<CancelTicketCommand, b
             await transaction.CommitAsync(cancellationToken);
 
             return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to execute CancelTicketCommand for TicketId: {TicketId}", request.TicketId);
-            throw;
-        }
     }
 }

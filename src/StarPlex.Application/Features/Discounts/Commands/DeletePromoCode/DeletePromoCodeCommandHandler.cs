@@ -1,4 +1,5 @@
-﻿using MediatR;
+using MediatR;
+using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
 
 namespace StarPlex.Application.Features.Discounts.Commands.DeletePromoCode;
@@ -17,7 +18,7 @@ public class DeletePromoCodeCommandHandler : IRequestHandler<DeletePromoCodeComm
         var discount = await _context.Discounts.FindAsync(new object[] { request.Id }, cancellationToken);
 
         if (discount == null)
-            throw new Exception("Promo code not found.");
+            throw new NotFoundException("Promo code", request.Id);
 
         _context.Discounts.Remove(discount);
         await _context.SaveChangesAsync(cancellationToken);

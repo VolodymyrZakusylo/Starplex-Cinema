@@ -43,8 +43,6 @@ public class UpdateSeatPropertiesCommandHandler : IRequestHandler<UpdateSeatProp
         }
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
-        {
             seat.Type = request.Type;
             seat.Status = request.Status;
 
@@ -118,11 +116,5 @@ public class UpdateSeatPropertiesCommandHandler : IRequestHandler<UpdateSeatProp
             await transaction.CommitAsync(cancellationToken);
 
             return Unit.Value;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to completely deactivate seat and process entity updates for SeatId: {SeatId}", request.SeatId);
-            throw;
-        }
     }
 }

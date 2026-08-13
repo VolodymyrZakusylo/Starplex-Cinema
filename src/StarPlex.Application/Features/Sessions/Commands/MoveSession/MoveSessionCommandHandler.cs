@@ -23,7 +23,7 @@ public class MoveSessionCommandHandler : IRequestHandler<MoveSessionCommand, boo
             .FirstOrDefaultAsync(s => s.Id == request.SessionId, cancellationToken);
 
         if (session == null)
-            throw new InvalidOperationException("Session not found.");
+            throw new NotFoundException("Session", request.SessionId);
 
         if (session.OriginalPrice == 0 && session.BasePrice > 0)
         {
