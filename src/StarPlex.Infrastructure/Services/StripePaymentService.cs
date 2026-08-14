@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Common.Models;
 using Stripe;
@@ -8,10 +9,12 @@ namespace StarPlex.Infrastructure.Services;
 public class StripePaymentService : IPaymentService
 {
     private readonly StripeSettings _settings;
+    private readonly ILogger<StripePaymentService> _logger;
 
-    public StripePaymentService(IOptions<StripeSettings> settings)
+    public StripePaymentService(IOptions<StripeSettings> settings, ILogger<StripePaymentService> logger)
     {
         _settings = settings.Value;
+        _logger = logger;
         StripeConfiguration.ApiKey = _settings.SecretKey;
     }
 
@@ -50,8 +53,9 @@ public class StripePaymentService : IPaymentService
 
             return refund.Status == "succeeded" || refund.Status == "pending";
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to refund payment {PaymentIntentId}", paymentIntentId);
             return false;
         }
     }

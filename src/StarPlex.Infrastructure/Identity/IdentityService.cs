@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using StarPlex.Application.Common.Interfaces;
@@ -22,17 +23,20 @@ public class IdentityService : IIdentityService
     private readonly RoleManager<IdentityRole<Guid>> _roleManager;
     private readonly ApplicationDbContext _context;
     private readonly JwtSettings _jwtSettings;
+    private readonly ILogger<IdentityService> _logger;
 
     public IdentityService(
         UserManager<ApplicationUser> userManager,
         RoleManager<IdentityRole<Guid>> roleManager,
         ApplicationDbContext context,
-        IOptions<JwtSettings> jwtSettings)
+        IOptions<JwtSettings> jwtSettings,
+        ILogger<IdentityService> logger)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _context = context;
         _jwtSettings = jwtSettings.Value;
+        _logger = logger;
     }
 
     public async Task<bool> IsEmailUniqueAsync(string email)
@@ -44,7 +48,10 @@ public class IdentityService : IIdentityService
     public async Task<AuthResponse?> RegisterAsync(string email, string password, string firstName, string lastName, DateTime dateOfBirth, CancellationToken cancellationToken = default)
     {
         if (!await IsEmailUniqueAsync(email))
+        {
+            _logger.LogWarning("Registration failed: email is already in use");
             return null;
+        }
 
         var user = new ApplicationUser(firstName, lastName, dateOfBirth)
         {
@@ -54,21 +61,34 @@ public class IdentityService : IIdentityService
 
         var result = await _userManager.CreateAsync(user, password);
         if (!result.Succeeded)
+        {
+            _logger.LogWarning("Registration failed due to invalid user data or password requirements");
             return null;
+        }
 
         await _userManager.AddToRoleAsync(user, UserRole.Customer.ToString());
 
+        _logger.LogInformation("Successfully registered new user {UserId}", user.Id);
         return await GenerateAuthResponseAsync(user, cancellationToken);
     }
 
     public async Task<AuthResponse?> LoginAsync(string email, string password, CancellationToken cancellationToken = default)
     {
         var user = await _userManager.FindByEmailAsync(email);
-        if (user == null) return null;
+        if (user == null)
+        {
+            _logger.LogWarning("Failed login attempt: user not found");
+            return null;
+        }
 
         var isPasswordValid = await _userManager.CheckPasswordAsync(user, password);
-        if (!isPasswordValid) return null;
+        if (!isPasswordValid)
+        {
+            _logger.LogWarning("Failed login attempt for user {UserId}: invalid password", user.Id);
+            return null;
+        }
 
+        _logger.LogInformation("Successful login for user {UserId}", user.Id);
         return await GenerateAuthResponseAsync(user, cancellationToken);
     }
 
@@ -98,6 +118,7 @@ public class IdentityService : IIdentityService
 
         storedToken.IsRevoked = true;
         await _context.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Token revoked for user {UserId}", storedToken.UserId);
         return true;
     }
 
@@ -119,6 +140,14 @@ public class IdentityService : IIdentityService
         if (user == null) return false;
 
         var result = await _userManager.ChangePasswordAsync(user, oldPassword, newPassword);
+        if (result.Succeeded)
+        {
+            _logger.LogInformation("Password changed successfully for user {UserId}", userId);
+        }
+        else
+        {
+            _logger.LogWarning("Failed password change attempt for user {UserId}", userId);
+        }
         return result.Succeeded;
     }
 
@@ -228,7 +257,11 @@ public class IdentityService : IIdentityService
         }
 
         var updateResult = await _userManager.UpdateAsync(user);
-        if (!updateResult.Succeeded) return false;
+        if (!updateResult.Succeeded)
+        {
+            _logger.LogWarning("Failed to update user {UserId} properties during role change", userId);
+            return false;
+        }
 
         var currentRoles = await _userManager.GetRolesAsync(user);
 
@@ -238,6 +271,14 @@ public class IdentityService : IIdentityService
         }
 
         var roleResult = await _userManager.AddToRoleAsync(user, roleName);
+        if (roleResult.Succeeded)
+        {
+            _logger.LogInformation("Successfully updated user {UserId} to role {RoleName}", userId, roleName);
+        }
+        else
+        {
+            _logger.LogWarning("Failed to add user {UserId} to role {RoleName}", userId, roleName);
+        }
         return roleResult.Succeeded;
     }
 

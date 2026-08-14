@@ -1,5 +1,6 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using StarPlex.Application.Common.Models;
 using StarPlex.Application.Features.Bookings.Commands.ConfirmBooking;
@@ -13,11 +14,13 @@ public class StripeWebhookController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly StripeSettings _settings;
+    private readonly ILogger<StripeWebhookController> _logger;
 
-    public StripeWebhookController(IMediator mediator, IOptions<StripeSettings> settings)
+    public StripeWebhookController(IMediator mediator, IOptions<StripeSettings> settings, ILogger<StripeWebhookController> logger)
     {
         _mediator = mediator;
         _settings = settings.Value;
+        _logger = logger;
     }
 
     [HttpPost]
@@ -53,6 +56,7 @@ public class StripeWebhookController : ControllerBase
         }
         catch (StripeException ex)
         {
+            _logger.LogWarning(ex, "Webhook signature verification failed");
             return BadRequest(new { Message = $"Webhook signature verification failed: {ex.Message}" });
         }
     }

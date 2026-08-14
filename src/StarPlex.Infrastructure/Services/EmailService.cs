@@ -1,4 +1,5 @@
-﻿using MailKit.Net.Smtp;
+using MailKit.Net.Smtp;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
 using StarPlex.Application.Common.Interfaces;
@@ -9,10 +10,12 @@ namespace StarPlex.Infrastructure.Services;
 public class EmailService : IEmailService
 {
     private readonly EmailSettings _settings;
+    private readonly ILogger<EmailService> _logger;
 
-    public EmailService(IOptions<EmailSettings> settings)
+    public EmailService(IOptions<EmailSettings> settings, ILogger<EmailService> logger)
     {
         _settings = settings.Value;
+        _logger = logger;
     }
 
     public async Task SendTicketEmailAsync(
@@ -58,16 +61,24 @@ public class EmailService : IEmailService
 
         message.Body = bodyBuilder.ToMessageBody();
 
-        using var client = new SmtpClient();
-
-        await client.ConnectAsync(_settings.SmtpHost, _settings.SmtpPort, MailKit.Security.SecureSocketOptions.Auto, ct);
-
-        if (!string.IsNullOrEmpty(_settings.SmtpUser) && !string.IsNullOrEmpty(_settings.SmtpPassword))
+        try
         {
-            await client.AuthenticateAsync(_settings.SmtpUser, _settings.SmtpPassword, ct);
-        }
+            using var client = new SmtpClient();
 
-        await client.SendAsync(message, ct);
-        await client.DisconnectAsync(true, ct);
+            await client.ConnectAsync(_settings.SmtpHost, _settings.SmtpPort, MailKit.Security.SecureSocketOptions.Auto, ct);
+
+            if (!string.IsNullOrEmpty(_settings.SmtpUser) && !string.IsNullOrEmpty(_settings.SmtpPassword))
+            {
+                await client.AuthenticateAsync(_settings.SmtpUser, _settings.SmtpPassword, ct);
+            }
+
+            await client.SendAsync(message, ct);
+            await client.DisconnectAsync(true, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send ticket email to {RecipientEmail}", toEmail);
+            throw;
+        }
     }
 }
