@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Enums;
@@ -35,15 +35,15 @@ public class GetAdminDashboardStatsQueryHandler : IRequestHandler<GetAdminDashbo
         {
             if (request.IsOnline == "online")
             {
-                bookingsQuery = bookingsQuery.Where(b => b.UserId != null && b.UserId != Guid.Empty);
-                seatsQuery = seatsQuery.Where(bs => bs.Booking.UserId != null && bs.Booking.UserId != Guid.Empty);
-                paymentsQuery = paymentsQuery.Where(p => p.Booking.UserId != null && p.Booking.UserId != Guid.Empty);
+                bookingsQuery = bookingsQuery.Where(b => b.UserId != Guid.Empty);
+                seatsQuery = seatsQuery.Where(bs => bs.Booking.UserId != Guid.Empty);
+                paymentsQuery = paymentsQuery.Where(p => p.Booking.UserId != Guid.Empty);
             }
             else if (request.IsOnline == "boxoffice")
             {
-                bookingsQuery = bookingsQuery.Where(b => b.UserId == null || b.UserId == Guid.Empty);
-                seatsQuery = seatsQuery.Where(bs => bs.Booking.UserId == null || bs.Booking.UserId == Guid.Empty);
-                paymentsQuery = paymentsQuery.Where(p => p.Booking.UserId == null || p.Booking.UserId == Guid.Empty);
+                bookingsQuery = bookingsQuery.Where(b => b.UserId == Guid.Empty);
+                seatsQuery = seatsQuery.Where(bs => bs.Booking.UserId == Guid.Empty);
+                paymentsQuery = paymentsQuery.Where(p => p.Booking.UserId == Guid.Empty);
             }
         }
 
