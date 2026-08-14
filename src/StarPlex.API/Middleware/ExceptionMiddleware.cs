@@ -1,8 +1,8 @@
-﻿using FluentValidation;
+using FluentValidation;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 using StarPlex.Application.Common.Exceptions;
 
 namespace StarPlex.API.Middleware;
@@ -12,7 +12,9 @@ public class ExceptionMiddleware
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionMiddleware> _logger;
 
-    public ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddleware> logger)
+    public ExceptionMiddleware(
+        RequestDelegate next,
+        ILogger<ExceptionMiddleware> logger)
     {
         _next = next;
         _logger = logger;
@@ -24,65 +26,120 @@ public class ExceptionMiddleware
         {
             await _next(context);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            _logger.LogError(ex, "An unhandled exception occurred during request processing.");
-            await HandleExceptionAsync(context, ex);
+            await HandleExceptionAsync(context, exception);
         }
     }
 
-    private static Task HandleExceptionAsync(HttpContext context, Exception exception)
+    private async Task HandleExceptionAsync(
+        HttpContext context,
+        Exception exception)
     {
-        context.Response.ContentType = "application/json";
+        context.Response.ContentType = "application/problem+json";
 
-        var (statusCode, message, errors) = exception switch
+        ProblemDetails problem;
+
+        switch (exception)
         {
-            ValidationException validationEx => (
-                StatusCodes.Status400BadRequest,
-                "Validation failed.",
-                validationEx.Errors.Select(e => e.ErrorMessage).ToArray()
-            ),
+            case FluentValidation.ValidationException validationException:
 
-            NotFoundException notFoundEx => (
-                StatusCodes.Status404NotFound,
-                "Resource not found.",
-                new[] { notFoundEx.Message }
-            ),
+                _logger.LogWarning("Validation failed: {Message}", validationException.Message);
 
-            KeyNotFoundException keyNotFoundEx => (
-                StatusCodes.Status404NotFound,
-                "Not found.",
-                new[] { keyNotFoundEx.Message }
-            ),
+                problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Validation failed.",
+                    Detail = "One or more validation errors occurred."
+                };
 
-            InvalidOperationException invalidOpEx => (
-                StatusCodes.Status409Conflict,
-                "Conflict occurred.",
-                new[] { invalidOpEx.Message }
-            ),
+                problem.Extensions["errors"] = validationException.Errors
+                    .GroupBy(e => e.PropertyName, e => e.ErrorMessage)
+                    .ToDictionary(g => g.Key, g => g.ToArray());
 
-            DbUpdateException => (
-                StatusCodes.Status409Conflict,
-                "Database conflict.",
-                new[] { "Duplicate or invalid data detected in the database." }
-            ),
+                break;
 
-            _ => (
-                StatusCodes.Status500InternalServerError,
-                "An internal server error occurred.",
-                new[] { exception.Message }
-            )
-        };
+            case NotFoundException notFound:
 
-        context.Response.StatusCode = statusCode;
+                _logger.LogWarning("Resource not found: {Message}", notFound.Message);
 
-        var responseObject = new
-        {
-            StatusCode = statusCode,
-            Message = message,
-            Errors = errors
-        };
+                problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status404NotFound,
+                    Title = "Resource not found.",
+                    Detail = notFound.Message
+                };
 
-        return context.Response.WriteAsync(JsonSerializer.Serialize(responseObject));
+                break;
+
+            case ConflictException conflict:
+
+                _logger.LogWarning("Conflict: {Message}", conflict.Message);
+
+                problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status409Conflict,
+                    Title = "Conflict.",
+                    Detail = conflict.Message
+                };
+
+                break;
+
+            case BusinessRuleException business:
+
+                _logger.LogWarning("Business rule violation: {Message}", business.Message);
+
+                problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Business rule violation.",
+                    Detail = business.Message
+                };
+
+                break;
+
+            case UnauthorizedException unauthorized:
+
+                _logger.LogWarning("Unauthorized: {Message}", unauthorized.Message);
+
+                problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Title = "Unauthorized.",
+                    Detail = unauthorized.Message
+                };
+
+                break;
+
+            case ForbiddenException forbidden:
+
+                _logger.LogWarning("Forbidden: {Message}", forbidden.Message);
+
+                problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status403Forbidden,
+                    Title = "Forbidden.",
+                    Detail = forbidden.Message
+                };
+
+                break;
+
+            default:
+
+                _logger.LogError(exception, "Unhandled exception occurred while processing request.");
+
+                problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status500InternalServerError,
+                    Title = "Internal Server Error",
+                    Detail = "An unexpected error occurred while processing your request."
+                };
+
+                break;
+        }
+
+        context.Response.StatusCode = problem.Status!.Value;
+
+        await context.Response.WriteAsJsonAsync(problem);
     }
 }

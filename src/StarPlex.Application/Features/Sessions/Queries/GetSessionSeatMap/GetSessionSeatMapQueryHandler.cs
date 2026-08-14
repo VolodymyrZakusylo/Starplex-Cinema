@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
@@ -30,12 +30,12 @@ public class GetSessionSeatMapQueryHandler : IRequestHandler<GetSessionSeatMapQu
 
         if (session.Status == SessionStatus.Cancelled || session.Status == SessionStatus.Completed)
         {
-            throw new InvalidOperationException("This session is no longer available for booking.");
+            throw new BusinessRuleException("This session is no longer available for booking.");
         }
 
         if (session.Hall != null && !session.Hall.IsActive)
         {
-            throw new InvalidOperationException("The cinema hall for this session is temporarily inactive.");
+            throw new BusinessRuleException("The cinema hall for this session is temporarily inactive.");
         }
 
         var allSeats = await _context.Seats

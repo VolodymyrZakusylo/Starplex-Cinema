@@ -1,4 +1,5 @@
-﻿using MediatR;
+using StarPlex.Application.Common.Exceptions;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
@@ -23,7 +24,7 @@ public class GenerateScheduleCommandHandler : IRequestHandler<GenerateScheduleCo
             .ToListAsync(cancellationToken);
 
         if (!halls.Any())
-            throw new InvalidOperationException("There are no active halls in this cinema to generate a schedule.");
+            throw new BusinessRuleException("There are no active halls in this cinema to generate a schedule.");
 
         var existingSessionsOnDate = await _context.Sessions
             .Where(s => s.Status == SessionStatus.Active &&
@@ -32,7 +33,7 @@ public class GenerateScheduleCommandHandler : IRequestHandler<GenerateScheduleCo
             .ToListAsync(cancellationToken);
 
         if (existingSessionsOnDate.Any())
-            throw new InvalidOperationException($"Schedule for {request.TargetDate:dd.MM.yyyy} already exists ({existingSessionsOnDate.Count} sessions found). Please clear it first.");
+            throw new ConflictException($"Schedule for {request.TargetDate:dd.MM.yyyy} already exists ({existingSessionsOnDate.Count} sessions found). Please clear it first.");
 
         var movies = await _context.Movies
             .Where(m => request.MovieIds.Contains(m.Id) && m.Status == MovieStatus.NowShowing)
@@ -40,7 +41,7 @@ public class GenerateScheduleCommandHandler : IRequestHandler<GenerateScheduleCo
             .ToListAsync(cancellationToken);
 
         if (!movies.Any())
-            throw new InvalidOperationException("No active movies were found for generation.");
+            throw new BusinessRuleException("No active movies were found for generation.");
 
         int sessionsCreated = 0;
 

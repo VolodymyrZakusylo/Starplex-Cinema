@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Enums;
@@ -19,11 +19,6 @@ public class ScanTicketCommandHandler : IRequestHandler<ScanTicketCommand, ScanT
 
     public async Task<ScanTicketResultDto> Handle(ScanTicketCommand request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.TicketCode))
-        {
-            return new ScanTicketResultDto { IsSuccess = false, Message = "Invalid or empty ticket code." };
-        }
-
         var ticket = await _context.Tickets
             .Include(t => t.BookingSeat)
                 .ThenInclude(bs => bs.Seat)

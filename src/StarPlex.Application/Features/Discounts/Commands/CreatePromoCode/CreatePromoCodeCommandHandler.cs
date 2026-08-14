@@ -1,5 +1,6 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
+using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
 
@@ -20,7 +21,7 @@ public class CreatePromoCodeCommandHandler : IRequestHandler<CreatePromoCodeComm
             .AnyAsync(d => d.Code.ToLower() == request.Code.Trim().ToLower(), cancellationToken);
 
         if (exists)
-            throw new Exception("Promo code already exists.");
+            throw new ConflictException("Promo code already exists.");
 
         var discount = new Discount
         {

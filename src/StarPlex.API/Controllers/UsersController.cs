@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Common.Models;
@@ -24,14 +24,16 @@ public class UsersController : ControllerBase
         [FromQuery] UserRole? roleFilter,
         [FromQuery] Guid? cinemaIdFilter,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10)
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
     {
         var (users, totalCount) = await _identityService.SearchUsersAsync(
             searchTerm ?? string.Empty,
             roleFilter,
             cinemaIdFilter,
             page,
-            pageSize
+            pageSize,
+            cancellationToken
         );
 
         return Ok(new PagedUserStaffResponse
@@ -46,9 +48,7 @@ public class UsersController : ControllerBase
         [FromRoute] Guid id,
         [FromBody] UpdateRoleRequest request)
     {
-        try
-        {
-            var success = await _identityService.UpdateUserRoleAndCinemaAsync(id, request.NewRole, request.CinemaId);
+        var success = await _identityService.UpdateUserRoleAndCinemaAsync(id, request.NewRole, request.CinemaId);
 
             if (!success)
             {
@@ -56,11 +56,6 @@ public class UsersController : ControllerBase
             }
 
             return Ok(new { message = "User role and access permissions updated successfully." });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
     }
 }
 

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -42,7 +42,10 @@ public static class DependencyInjection
         .AddDefaultTokenProviders();
 
         var jwtSection = configuration.GetSection("JwtSettings");
-        services.Configure<JwtSettings>(jwtSection);
+        services.AddOptions<JwtSettings>()
+            .Bind(jwtSection)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         var jwtSettings = jwtSection.Get<JwtSettings>()
             ?? throw new InvalidOperationException("JwtSettings section is missing from configuration.");
 
@@ -67,9 +70,15 @@ public static class DependencyInjection
             };
         });
 
-        services.AddHttpClient<ITmdbService, TmdbService>(client =>
+        services.AddOptions<TmdbSettings>()
+            .Bind(configuration.GetSection("TmdbSettings"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddHttpClient<ITmdbService, TmdbService>((provider, client) =>
         {
-            client.BaseAddress = new Uri(configuration["TmdbSettings:BaseUrl"] ?? "https://api.themoviedb.org/3/");
+            var tmdbSettings = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<TmdbSettings>>().Value;
+            client.BaseAddress = new Uri(tmdbSettings.BaseUrl);
         });
 
         services.AddScoped<IIdentityService, IdentityService>();
@@ -81,14 +90,20 @@ public static class DependencyInjection
 
         services.AddScoped<ISeatHubService, SeatHubService>();
 
-        services.Configure<StripeSettings>(configuration.GetSection("StripeSettings"));
+        services.AddOptions<StripeSettings>()
+            .Bind(configuration.GetSection("StripeSettings"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         services.AddScoped<IPaymentService, StripePaymentService>();
 
         services.AddScoped<IQrCodeService, QrCodeService>();
         services.AddScoped<ITicketService, TicketService>();
 
         services.AddScoped<IUserService, UserService>();
-        services.Configure<EmailSettings>(configuration.GetSection("EmailSettings"));
+        services.AddOptions<EmailSettings>()
+            .Bind(configuration.GetSection("EmailSettings"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         services.AddScoped<IEmailService, EmailService>();
 
         return services;

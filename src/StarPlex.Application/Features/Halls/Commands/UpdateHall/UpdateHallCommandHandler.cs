@@ -1,4 +1,5 @@
-﻿using MediatR;
+using StarPlex.Application.Common.Exceptions;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 
@@ -22,12 +23,12 @@ public class UpdateHallCommandHandler : IRequestHandler<UpdateHallCommand>
 
         if (hall == null)
         {
-            throw new KeyNotFoundException($"Hall with ID '{request.Id}' was not found.");
+            throw new NotFoundException("Hall", request.Id);
         }
 
         if (!_currentUserService.IsSuperAdmin && _currentUserService.CinemaId != hall.CinemaId)
         {
-            throw new InvalidOperationException("У вас немає прав для редагування залів цього кінотеатру.");
+            throw new ForbiddenException("У вас немає прав для редагування залів цього кінотеатру.");
         }
 
         var trimmedName = request.Name.Trim();
@@ -39,7 +40,7 @@ public class UpdateHallCommandHandler : IRequestHandler<UpdateHallCommand>
 
         if (isDuplicate)
         {
-            throw new InvalidOperationException($"Another hall with name '{trimmedName}' already exists in this cinema.");
+            throw new ConflictException($"Another hall with name '{trimmedName}' already exists in this cinema.");
         }
 
         hall.Name = trimmedName;

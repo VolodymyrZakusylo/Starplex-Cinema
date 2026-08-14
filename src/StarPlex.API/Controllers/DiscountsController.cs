@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StarPlex.Application.Features.Discounts.Commands.ApplyPromoCode;
@@ -60,29 +60,15 @@ public class DiscountsController : ControllerBase
     [Authorize(Roles = "SuperAdmin")]
     public async Task<ActionResult<Guid>> CreatePromoCode([FromBody] CreatePromoCodeCommand command)
     {
-        try
-        {
-            var id = await _mediator.Send(command);
-            return Ok(new { Id = id, IsSuccess = true });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Message = ex.Message });
-        }
+        var id = await _mediator.Send(command);
+        return Ok(new { Id = id, IsSuccess = true });
     }
 
     [HttpDelete("{id}")]
     [Authorize(Roles = "SuperAdmin")]
     public async Task<IActionResult> DeletePromoCode(Guid id)
     {
-        try
-        {
-            await _mediator.Send(new DeletePromoCodeCommand(id));
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            return NotFound(new { Message = ex.Message });
-        }
+        await _mediator.Send(new DeletePromoCodeCommand(id));
+        return NoContent();
     }
 }

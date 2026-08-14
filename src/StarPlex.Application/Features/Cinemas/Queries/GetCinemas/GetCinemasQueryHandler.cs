@@ -1,4 +1,4 @@
-﻿using Mapster;
+using Mapster;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
@@ -17,10 +17,9 @@ public class GetCinemasQueryHandler : IRequestHandler<GetCinemasQuery, List<Cine
 
     public async Task<List<CinemaDto>> Handle(GetCinemasQuery request, CancellationToken cancellationToken)
     {
-        var cinemas = await _context.Cinemas
+        return await _context.Cinemas
             .AsNoTracking()
+            .ProjectToType<CinemaDto>()
             .ToListAsync(cancellationToken);
-
-        return cinemas.Adapt<List<CinemaDto>>();
     }
 }

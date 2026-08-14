@@ -1,6 +1,7 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Features.Movies.DTOs;
 
@@ -10,13 +11,13 @@ public class TmdbService : ITmdbService
 {
     private readonly HttpClient _httpClient;
     private readonly string _apiKey;
+    private readonly ILogger<TmdbService> _logger;
 
-    public TmdbService(HttpClient httpClient, IConfiguration configuration)
+    public TmdbService(HttpClient httpClient, IOptions<TmdbSettings> options, ILogger<TmdbService> logger)
     {
         _httpClient = httpClient;
-        _apiKey = configuration["TmdbSettings:ApiKey"]
-              ?? configuration.GetSection("TmdbSettings")["ApiKey"]
-              ?? throw new ArgumentNullException("TMDB API Key is missing in appsettings.json");
+        _apiKey = options.Value.ApiKey;
+        _logger = logger;
     }
 
     public async Task<List<TmdbMovieResultDto>> SearchMoviesAsync(string query, CancellationToken cancellationToken)
@@ -94,8 +95,9 @@ public class TmdbService : ITmdbService
                     : DateTime.UtcNow
             };
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
+            _logger.LogError(ex, "Failed to retrieve movie details for TMDB ID {TmdbId}", tmdbId);
             return null;
         }
     }

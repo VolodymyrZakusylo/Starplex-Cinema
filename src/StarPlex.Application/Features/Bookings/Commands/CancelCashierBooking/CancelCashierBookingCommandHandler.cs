@@ -1,4 +1,5 @@
-﻿using MediatR;
+using StarPlex.Application.Common.Exceptions;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Enums;
@@ -33,12 +34,12 @@ public class CancelCashierBookingCommandHandler : IRequestHandler<CancelCashierB
 
         if (booking.UserId != Guid.Empty)
         {
-            throw new InvalidOperationException("Error: Attempted to cancel an online user booking via the cashier method. Please use Stripe cancellation.");
+            throw new BusinessRuleException("Error: Attempted to cancel an online user booking via the cashier method. Please use Stripe cancellation.");
         }
 
         if (booking.Status == BookingStatus.Cancelled)
         {
-            throw new InvalidOperationException("This cashier booking has already been cancelled.");
+            throw new BusinessRuleException("This cashier booking has already been cancelled.");
         }
 
         booking.Status = BookingStatus.Cancelled;

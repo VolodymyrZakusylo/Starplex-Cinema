@@ -1,4 +1,5 @@
-﻿using MediatR;
+using StarPlex.Application.Common.Exceptions;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
@@ -30,14 +31,14 @@ public class CreateMovieCommandHandler : IRequestHandler<CreateMovieCommand, Gui
 
             if (movieExistsInDb)
             {
-                throw new InvalidOperationException("Цей фільм уже імпортовано в систему.");
+                throw new ConflictException("Цей фільм уже імпортовано в систему.");
             }
 
             var tmdbMovie = await _tmdbService.GetMovieDetailsAsync(request.TmdbId, cancellationToken);
 
             if (tmdbMovie == null)
             {
-                throw new KeyNotFoundException($"Фільм з TMDB ID {request.TmdbId} не знадено.");
+                throw new NotFoundException("TMDB Movie", request.TmdbId);
             }
 
             var calculatedStatus = tmdbMovie.ReleaseDate > DateTime.UtcNow
@@ -62,11 +63,6 @@ public class CreateMovieCommandHandler : IRequestHandler<CreateMovieCommand, Gui
         }
         else
         {
-            if (string.IsNullOrWhiteSpace(request.Title))
-            {
-                throw new InvalidOperationException("Назва фільму є обов'язковою для ручного введення.");
-            }
-
             var releaseDateUtc = request.ReleaseDate.HasValue
                 ? DateTime.SpecifyKind(request.ReleaseDate.Value, DateTimeKind.Utc)
                 : DateTime.UtcNow;
@@ -77,8 +73,8 @@ public class CreateMovieCommandHandler : IRequestHandler<CreateMovieCommand, Gui
 
             movie = new Movie(
                 0,
-                request.Title.Trim(),
-                request.OriginalTitle?.Trim() ?? request.Title.Trim(),
+                request.Title!.Trim(),
+                request.OriginalTitle?.Trim() ?? request.Title!.Trim(),
                 request.Description?.Trim() ?? string.Empty,
                 request.DurationInMinutes,
                 request.PosterUrl?.Trim() ?? string.Empty,

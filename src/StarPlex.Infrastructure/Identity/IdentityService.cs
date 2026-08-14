@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Common.Models;
+using StarPlex.Application.Common.Exceptions;
 using StarPlex.Domain.Entities;
 using StarPlex.Domain.Enums;
 using StarPlex.Infrastructure.Authentication;
@@ -21,17 +23,20 @@ public class IdentityService : IIdentityService
     private readonly RoleManager<IdentityRole<Guid>> _roleManager;
     private readonly ApplicationDbContext _context;
     private readonly JwtSettings _jwtSettings;
+    private readonly ILogger<IdentityService> _logger;
 
     public IdentityService(
         UserManager<ApplicationUser> userManager,
         RoleManager<IdentityRole<Guid>> roleManager,
         ApplicationDbContext context,
-        IOptions<JwtSettings> jwtSettings)
+        IOptions<JwtSettings> jwtSettings,
+        ILogger<IdentityService> logger)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _context = context;
         _jwtSettings = jwtSettings.Value;
+        _logger = logger;
     }
 
     public async Task<bool> IsEmailUniqueAsync(string email)
@@ -40,10 +45,13 @@ public class IdentityService : IIdentityService
         return user == null;
     }
 
-    public async Task<AuthResponse?> RegisterAsync(string email, string password, string firstName, string lastName, DateTime dateOfBirth)
+    public async Task<AuthResponse?> RegisterAsync(string email, string password, string firstName, string lastName, DateTime dateOfBirth, CancellationToken cancellationToken = default)
     {
         if (!await IsEmailUniqueAsync(email))
+        {
+            _logger.LogWarning("Registration failed: email is already in use");
             return null;
+        }
 
         var user = new ApplicationUser(firstName, lastName, dateOfBirth)
         {
@@ -53,50 +61,64 @@ public class IdentityService : IIdentityService
 
         var result = await _userManager.CreateAsync(user, password);
         if (!result.Succeeded)
+        {
+            _logger.LogWarning("Registration failed due to invalid user data or password requirements");
             return null;
+        }
 
         await _userManager.AddToRoleAsync(user, UserRole.Customer.ToString());
 
-        return await GenerateAuthResponseAsync(user);
+        _logger.LogInformation("Successfully registered new user {UserId}", user.Id);
+        return await GenerateAuthResponseAsync(user, cancellationToken);
     }
 
-    public async Task<AuthResponse?> LoginAsync(string email, string password)
+    public async Task<AuthResponse?> LoginAsync(string email, string password, CancellationToken cancellationToken = default)
     {
         var user = await _userManager.FindByEmailAsync(email);
-        if (user == null) return null;
+        if (user == null)
+        {
+            _logger.LogWarning("Failed login attempt: user not found");
+            return null;
+        }
 
         var isPasswordValid = await _userManager.CheckPasswordAsync(user, password);
-        if (!isPasswordValid) return null;
+        if (!isPasswordValid)
+        {
+            _logger.LogWarning("Failed login attempt for user {UserId}: invalid password", user.Id);
+            return null;
+        }
 
-        return await GenerateAuthResponseAsync(user);
+        _logger.LogInformation("Successful login for user {UserId}", user.Id);
+        return await GenerateAuthResponseAsync(user, cancellationToken);
     }
 
-    public async Task<AuthResponse?> RefreshTokenAsync(string refreshTokenStr)
+    public async Task<AuthResponse?> RefreshTokenAsync(string refreshTokenStr, CancellationToken cancellationToken = default)
     {
         var storedToken = await _context.RefreshTokens
-            .FirstOrDefaultAsync(x => x.Token == refreshTokenStr);
+            .FirstOrDefaultAsync(x => x.Token == refreshTokenStr, cancellationToken);
 
         if (storedToken == null || !storedToken.IsActive)
             return null;
 
         storedToken.IsRevoked = true;
-        await _context.SaveChangesAsync(CancellationToken.None);
+        await _context.SaveChangesAsync(cancellationToken);
 
         var user = await _userManager.FindByIdAsync(storedToken.UserId.ToString());
         if (user == null) return null;
 
-        return await GenerateAuthResponseAsync(user);
+        return await GenerateAuthResponseAsync(user, cancellationToken);
     }
 
-    public async Task<bool> RevokeTokenAsync(string refreshTokenStr)
+    public async Task<bool> RevokeTokenAsync(string refreshTokenStr, CancellationToken cancellationToken = default)
     {
         var storedToken = await _context.RefreshTokens
-            .FirstOrDefaultAsync(x => x.Token == refreshTokenStr);
+            .FirstOrDefaultAsync(x => x.Token == refreshTokenStr, cancellationToken);
 
         if (storedToken == null) return false;
 
         storedToken.IsRevoked = true;
-        await _context.SaveChangesAsync(CancellationToken.None);
+        await _context.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Token revoked for user {UserId}", storedToken.UserId);
         return true;
     }
 
@@ -118,6 +140,14 @@ public class IdentityService : IIdentityService
         if (user == null) return false;
 
         var result = await _userManager.ChangePasswordAsync(user, oldPassword, newPassword);
+        if (result.Succeeded)
+        {
+            _logger.LogInformation("Password changed successfully for user {UserId}", userId);
+        }
+        else
+        {
+            _logger.LogWarning("Failed password change attempt for user {UserId}", userId);
+        }
         return result.Succeeded;
     }
 
@@ -135,7 +165,8 @@ public class IdentityService : IIdentityService
         UserRole? roleFilter,
         Guid? cinemaIdFilter,
         int page,
-        int pageSize)
+        int pageSize,
+        CancellationToken cancellationToken = default)
     {
         var query = _userManager.Users.AsNoTracking();
 
@@ -166,7 +197,7 @@ public class IdentityService : IIdentityService
             }
         }
 
-        var totalCount = await query.CountAsync();
+        var totalCount = await query.CountAsync(cancellationToken);
 
         var usersDtoQuery = from user in query
                             join cinema in _context.Cinemas on user.CinemaId equals cinema.Id into cinemaJoin
@@ -185,7 +216,7 @@ public class IdentityService : IIdentityService
         var pagedUsers = await usersDtoQuery
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var userIds = pagedUsers.Select(u => u.Id).ToList();
 
@@ -194,7 +225,7 @@ public class IdentityService : IIdentityService
             join role in _context.Roles on ur.RoleId equals role.Id
             where userIds.Contains(ur.UserId)
             select new { ur.UserId, role.Name }
-        ).ToListAsync();
+        ).ToListAsync(cancellationToken);
 
         foreach (var dto in pagedUsers)
         {
@@ -220,13 +251,17 @@ public class IdentityService : IIdentityService
         {
             if (!cinemaId.HasValue)
             {
-                throw new InvalidOperationException("A cinema must be specified for cinema staff.");
+                throw new BusinessRuleException("A cinema must be specified for cinema staff.");
             }
             user.CinemaId = cinemaId.Value;
         }
 
         var updateResult = await _userManager.UpdateAsync(user);
-        if (!updateResult.Succeeded) return false;
+        if (!updateResult.Succeeded)
+        {
+            _logger.LogWarning("Failed to update user {UserId} properties during role change", userId);
+            return false;
+        }
 
         var currentRoles = await _userManager.GetRolesAsync(user);
 
@@ -236,10 +271,18 @@ public class IdentityService : IIdentityService
         }
 
         var roleResult = await _userManager.AddToRoleAsync(user, roleName);
+        if (roleResult.Succeeded)
+        {
+            _logger.LogInformation("Successfully updated user {UserId} to role {RoleName}", userId, roleName);
+        }
+        else
+        {
+            _logger.LogWarning("Failed to add user {UserId} to role {RoleName}", userId, roleName);
+        }
         return roleResult.Succeeded;
     }
 
-    private async Task<AuthResponse> GenerateAuthResponseAsync(ApplicationUser user)
+    private async Task<AuthResponse> GenerateAuthResponseAsync(ApplicationUser user, CancellationToken cancellationToken = default)
     {
         var userRoles = await _userManager.GetRolesAsync(user);
 
@@ -284,7 +327,7 @@ public class IdentityService : IIdentityService
         var refreshTokenEntity = new RefreshToken(user.Id, refreshTokenStr, DateTime.UtcNow.AddDays(7));
 
         _context.RefreshTokens.Add(refreshTokenEntity);
-        await _context.SaveChangesAsync(CancellationToken.None);
+        await _context.SaveChangesAsync(cancellationToken);
 
         return new AuthResponse
         {

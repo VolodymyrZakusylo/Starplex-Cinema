@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
@@ -36,10 +36,10 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
             .ToListAsync(cancellationToken);
 
         if (seats.Count != request.SeatIds.Count)
-            throw new InvalidOperationException("Some of the selected seats were not found in this hall.");
+            throw new BusinessRuleException("Some of the selected seats were not found in this hall.");
 
         if (seats.Any(s => s.Status == SeatStatus.Inactive))
-            throw new InvalidOperationException("Cannot sell tickets for an inactive or broken seat.");
+            throw new BusinessRuleException("Cannot sell tickets for an inactive or broken seat.");
 
         decimal totalPrice = 0;
         var bookingId = Guid.NewGuid();
@@ -73,9 +73,7 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
         };
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            _context.Bookings.Add(booking);
+        _context.Bookings.Add(booking);
             await _context.SaveChangesAsync(cancellationToken);
 
             var temporaryLocks = await _context.SelectedSeats
@@ -113,11 +111,5 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
             await transaction.CommitAsync(cancellationToken);
 
             return booking.Id;
-        }
-        catch (Exception)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
     }
 }

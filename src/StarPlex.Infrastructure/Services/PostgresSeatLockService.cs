@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
@@ -79,11 +79,6 @@ public class PostgresSeatLockService : ISeatLockService
         {
             await transaction.RollbackAsync(ct);
             return false;
-        }
-        catch
-        {
-            await transaction.RollbackAsync(ct);
-            throw;
         }
     }
 

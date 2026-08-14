@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
@@ -47,7 +47,7 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
 
         if (validUserLocksCount != request.SeatIds.Count)
         {
-            throw new InvalidOperationException("Your reservation session for some of these seats has expired or is invalid.");
+            throw new BusinessRuleException("Your reservation session for some of these seats has expired or is invalid.");
         }
 
         var seats = await _context.Seats
@@ -56,7 +56,7 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
             .ToListAsync(cancellationToken);
 
         if (seats.Any(s => s.Status == SeatStatus.Inactive))
-            throw new InvalidOperationException("One or more selected seats are undergoing technical maintenance and cannot be purchased.");
+            throw new BusinessRuleException("One or more selected seats are undergoing technical maintenance and cannot be purchased.");
 
         decimal totalPrice = 0;
         var bookingId = Guid.NewGuid();
@@ -92,7 +92,7 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
             }
             else
             {
-                throw new InvalidOperationException("The promo code provided is invalid, expired, or has reached its usage limit.");
+                throw new BusinessRuleException("The promo code provided is invalid, expired, or has reached its usage limit.");
             }
         }
 
@@ -112,9 +112,7 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
         if (_context is DbContext dbContext)
         {
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-            try
-            {
-                _context.Bookings.Add(booking);
+            _context.Bookings.Add(booking);
 
                 if (appliedDiscount != null)
                 {
@@ -149,12 +147,6 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
                     ClientSecret = clientSecret,
                     Message = "Booking initialized with discount and Stripe payment intent created successfully."
                 };
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw new InvalidOperationException($"Failed to initialize booking and payment: {ex.Message}", ex);
-            }
         }
 
         throw new InvalidOperationException("Database context is not compatible with transactions.");

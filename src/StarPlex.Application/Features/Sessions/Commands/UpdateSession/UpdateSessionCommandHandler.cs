@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
@@ -34,7 +34,7 @@ public class UpdateSessionCommandHandler : IRequestHandler<UpdateSessionCommand>
         if (!_currentUserService.IsSuperAdmin &&
             (_currentUserService.CinemaId != session.Hall.CinemaId || _currentUserService.CinemaId != targetHall.CinemaId))
         {
-            throw new InvalidOperationException("You do not have permission to manage this cinema.");
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
         }
 
         var hasBookings = await _context.Bookings
@@ -46,7 +46,7 @@ public class UpdateSessionCommandHandler : IRequestHandler<UpdateSessionCommand>
 
         if (hasBookings && (session.StartTime != startTimeUtc || session.HallId != request.HallId))
         {
-            throw new InvalidOperationException("Cannot change session time or hall because there are active bookings for this session.");
+            throw new BusinessRuleException("Cannot change session time or hall because there are active bookings for this session.");
         }
 
         if (session.StartTime != startTimeUtc || session.HallId != request.HallId)
@@ -75,7 +75,7 @@ public class UpdateSessionCommandHandler : IRequestHandler<UpdateSessionCommand>
 
             if (hasCollision)
             {
-                throw new InvalidOperationException("Time slot collision detected. The target hall is occupied by another session during this time.");
+                throw new ConflictException("Time slot collision detected. The target hall is occupied by another session during this time.");
             }
 
             session.StartTime = startTimeUtc;

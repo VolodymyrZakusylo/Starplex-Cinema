@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
@@ -34,7 +34,7 @@ public class CreateSessionCommandHandler : IRequestHandler<CreateSessionCommand,
 
         if (!_currentUserService.IsSuperAdmin && _currentUserService.CinemaId != hall.CinemaId)
         {
-            throw new InvalidOperationException("You do not have permission to manage this cinema.");
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
         }
 
         var movie = await _context.Movies
@@ -51,9 +51,7 @@ public class CreateSessionCommandHandler : IRequestHandler<CreateSessionCommand,
         var endTimeUtc = startTimeUtc.AddMinutes(movie.DurationInMinutes + cleanUpDuration);
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            var hasCollision = await _context.Sessions
+        var hasCollision = await _context.Sessions
                 .AsNoTracking()
                 .Where(s => s.HallId == request.HallId && s.Status == SessionStatus.Active)
                 .AnyAsync(s => s.StartTime < endTimeUtc &&
@@ -62,7 +60,7 @@ public class CreateSessionCommandHandler : IRequestHandler<CreateSessionCommand,
 
             if (hasCollision)
             {
-                throw new InvalidOperationException("Time slot collision detected. This hall is already occupied by another session during the specified time.");
+                throw new ConflictException("Time slot collision detected. This hall is already occupied by another session during the specified time.");
             }
 
             var session = new Session(
@@ -85,11 +83,5 @@ public class CreateSessionCommandHandler : IRequestHandler<CreateSessionCommand,
 
             await transaction.CommitAsync(cancellationToken);
             return session.Id;
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
     }
 }
