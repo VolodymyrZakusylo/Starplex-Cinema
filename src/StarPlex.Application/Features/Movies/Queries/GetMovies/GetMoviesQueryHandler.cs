@@ -1,4 +1,4 @@
-﻿using Mapster;
+using Mapster;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
@@ -24,8 +24,8 @@ public class GetMoviesQueryHandler : IRequestHandler<GetMoviesQuery, List<MovieD
             query = query.Where(m => m.Status == request.Status.Value);
         }
 
-        var movies = await query.ToListAsync(cancellationToken);
-
-        return movies.Adapt<List<MovieDto>>();
+        return await query
+            .ProjectToType<MovieDto>()
+            .ToListAsync(cancellationToken);
     }
 }

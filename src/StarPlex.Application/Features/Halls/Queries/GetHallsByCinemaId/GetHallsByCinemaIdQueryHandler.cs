@@ -1,4 +1,4 @@
-﻿using Mapster;
+using Mapster;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
@@ -17,11 +17,10 @@ public class GetHallsByCinemaIdQueryHandler : IRequestHandler<GetHallsByCinemaId
 
     public async Task<List<HallDto>> Handle(GetHallsByCinemaIdQuery request, CancellationToken cancellationToken)
     {
-        var halls = await _context.Halls
+        return await _context.Halls
             .AsNoTracking()
             .Where(h => h.CinemaId == request.CinemaId)
+            .ProjectToType<HallDto>()
             .ToListAsync(cancellationToken);
-
-        return halls.Adapt<List<HallDto>>();
     }
 }
