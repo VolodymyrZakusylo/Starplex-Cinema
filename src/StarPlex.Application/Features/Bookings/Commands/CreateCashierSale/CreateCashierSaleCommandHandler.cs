@@ -5,6 +5,7 @@ using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
 using StarPlex.Domain.Enums;
 using StarPlex.Domain.Services;
+using StarPlex.Domain.Factories;
 
 namespace StarPlex.Application.Features.Bookings.Commands.CreateCashierSale;
 
@@ -90,13 +91,7 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
 
             foreach (var bookingSeat in booking.BookingSeats)
             {
-                string ticketSegment = Guid.NewGuid().ToString()[..8].ToUpper();
-                string uniqueToken = $"SPX-{ticketSegment}";
-
-                var ticket = new Ticket(bookingSeat.Id, uniqueToken, isUsed: false)
-                {
-                    Id = Guid.NewGuid()
-                };
+                var ticket = TicketFactory.CreateForSeat(bookingSeat.Id);
 
                 _context.Tickets.Add(ticket);
             }
