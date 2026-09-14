@@ -21,6 +21,9 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     protected Mock<IPaymentService> PaymentServiceMock { get; } = new();
     protected Mock<ISeatLockService> SeatLockServiceMock { get; } = new();
     protected Mock<ICurrentUserService> CurrentUserServiceMock { get; } = new();
+    protected Mock<IUserService> UserServiceMock { get; } = new();
+    protected Mock<ITicketService> TicketServiceMock { get; } = new();
+    protected Mock<IEmailService> EmailServiceMock { get; } = new();
 
     public IntegrationTestBase()
     {
@@ -51,6 +54,9 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         services.AddScoped(_ => PaymentServiceMock.Object);
         services.AddScoped(_ => SeatLockServiceMock.Object);
         services.AddScoped(_ => CurrentUserServiceMock.Object);
+        services.AddScoped(_ => UserServiceMock.Object);
+        services.AddScoped(_ => TicketServiceMock.Object);
+        services.AddScoped(_ => EmailServiceMock.Object);
 
         var provider = services.BuildServiceProvider();
         _scope = provider.CreateScope();
