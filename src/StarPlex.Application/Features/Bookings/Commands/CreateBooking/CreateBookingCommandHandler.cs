@@ -114,39 +114,40 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
             _context.Bookings.Add(booking);
 
-                if (appliedDiscount != null)
-                {
-                    appliedDiscount.UsageCount++;
-                }
+            if (appliedDiscount != null)
+            {
+                appliedDiscount.UsageCount++;
+            }
 
-                await _context.SaveChangesAsync(cancellationToken);
+            var payment = new Payment(booking.Id, string.Empty, booking.TotalPrice, PaymentStatus.Pending)
+            {
+                Id = Guid.NewGuid()
+            };
 
-                string clientSecret = await _paymentService.CreatePaymentIntentAsync(
-                    booking.Id,
-                    booking.TotalPrice,
-                    "uah",
-                    cancellationToken);
+            _context.Payments.Add(payment);
+            await _context.SaveChangesAsync(cancellationToken);
 
-                string stripePaymentIntentId = clientSecret.Split("_secret_")[0];
+            await transaction.CommitAsync(cancellationToken);
 
-                var payment = new Payment(booking.Id, stripePaymentIntentId, booking.TotalPrice, PaymentStatus.Pending)
-                {
-                    Id = Guid.NewGuid()
-                };
+            string clientSecret = await _paymentService.CreatePaymentIntentAsync(
+                booking.Id,
+                booking.TotalPrice,
+                "uah",
+                cancellationToken);
 
-                _context.Payments.Add(payment);
-                await _context.SaveChangesAsync(cancellationToken);
+            string stripePaymentIntentId = clientSecret.Split("_secret_")[0];
 
-                await transaction.CommitAsync(cancellationToken);
+            payment.StripePaymentIntentId = stripePaymentIntentId;
+            await _context.SaveChangesAsync(cancellationToken);
 
-                return new BookingResponseDto
-                {
-                    BookingId = booking.Id,
-                    TotalAmount = booking.TotalPrice,
-                    Status = booking.Status.ToString(),
-                    ClientSecret = clientSecret,
-                    Message = "Booking initialized with discount and Stripe payment intent created successfully."
-                };
+            return new BookingResponseDto
+            {
+                BookingId = booking.Id,
+                TotalAmount = booking.TotalPrice,
+                Status = booking.Status.ToString(),
+                ClientSecret = clientSecret,
+                Message = "Booking initialized with discount and Stripe payment intent created successfully."
+            };
         }
 
         throw new InvalidOperationException("Database context is not compatible with transactions.");
