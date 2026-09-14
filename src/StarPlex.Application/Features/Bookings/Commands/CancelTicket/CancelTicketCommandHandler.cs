@@ -66,38 +66,39 @@ public class CancelTicketCommandHandler : IRequestHandler<CancelTicketCommand, b
             }
         }
 
+        var refundResult = await _paymentService.RefundPaymentAsync(
+            booking.Payment.StripePaymentIntentId,
+            refundAmount,
+            "uah",
+            cancellationToken
+        );
+
+        if (!refundResult)
+        {
+            _logger.LogWarning("Stripe refund failed via IPaymentService for TicketId: {TicketId}", request.TicketId);
+            return false;
+        }
+
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-            var refundResult = await _paymentService.RefundPaymentAsync(
-                booking.Payment.StripePaymentIntentId,
-                refundAmount,
-                "uah",
-                cancellationToken
-            );
 
-            if (!refundResult)
+        _context.Tickets.Remove(ticket);
+        _context.BookingSeats.Remove(ticket.BookingSeat);
+
+        var hasOtherSeats = await _context.BookingSeats
+            .AnyAsync(bs => bs.BookingId == booking.Id && bs.Id != ticket.BookingSeatId, cancellationToken);
+
+        if (!hasOtherSeats)
+        {
+            booking.Status = BookingStatus.Cancelled;
+            if (booking.Payment != null)
             {
-                _logger.LogWarning("Stripe refund failed via IPaymentService for TicketId: {TicketId}", request.TicketId);
-                return false;
+                booking.Payment.Status = PaymentStatus.Refunded;
             }
+        }
 
-            _context.Tickets.Remove(ticket);
-            _context.BookingSeats.Remove(ticket.BookingSeat);
+        await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
-            var hasOtherSeats = await _context.BookingSeats
-                .AnyAsync(bs => bs.BookingId == booking.Id && bs.Id != ticket.BookingSeatId, cancellationToken);
-
-            if (!hasOtherSeats)
-            {
-                booking.Status = BookingStatus.Cancelled;
-                if (booking.Payment != null)
-                {
-                    booking.Payment.Status = PaymentStatus.Refunded;
-                }
-            }
-
-            await _context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-
-            return true;
+        return true;
     }
 }
