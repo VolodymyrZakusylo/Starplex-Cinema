@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { moviesApi } from '@/api/movies';
+import { cinemasApi } from '@/api/cinemas';
 import { useCinemaStore } from '@/store/cinemaStore';
 import { useNavigate } from 'react-router-dom';
 import { Search, SlidersHorizontal, Clock, Star, MapPin } from 'lucide-react';
-import api from '@/api/axios';
 import { useToast } from '@/hooks/useToast';
-import type { Movie, CinemaDto } from '@/types/index';
+import type { Movie, CinemaDto } from '@/types';
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -23,8 +23,8 @@ export const HomePage: React.FC = () => {
 
   useEffect(() => {
     if (!selectedCinemaId) return;
-    api.get<CinemaDto>(`/Cinemas/${selectedCinemaId}`)
-      .then(res => setCurrentCinema(res.data))
+    cinemasApi.getById(selectedCinemaId)
+      .then(data => setCurrentCinema(data))
       .catch(() => setCurrentCinema(null));
   }, [selectedCinemaId]);
 
@@ -48,7 +48,7 @@ export const HomePage: React.FC = () => {
         setGenres(Array.from(allGenres).sort());
       } catch (err: any) {
         showError('Не вдалося завантажити афішу кінотеатру. Перевірте підключення.');
-      } {
+      } finally {
         setIsLoading(false);
       }
     };

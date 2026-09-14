@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { KeyRound } from 'lucide-react';
-import api from '@/api/axios';
+import { usersApi } from '@/api/users';
 
 export const ChangePasswordForm: React.FC = () => {
     const [oldPassword, setOldPassword] = useState('');
@@ -13,7 +13,7 @@ export const ChangePasswordForm: React.FC = () => {
 
         setIsUpdating(true);
         try {
-            await api.post('/User/change-password', { oldPassword, newPassword });
+            await usersApi.changePassword({ oldPassword, newPassword });
             alert('🔑 Пароль успішно змінено!');
             setOldPassword('');
             setNewPassword('');

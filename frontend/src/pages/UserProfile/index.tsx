@@ -1,31 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Ticket, ShieldAlert, User, UserMinus } from 'lucide-react';
-import api from '@/api/axios';
+import { bookingsApi } from '@/api/bookings';
+import { usersApi } from '@/api/users';
+import type { UserBookingDto } from '@/types/bookings';
 
 import { ProfileDataForm } from './components/ProfileDataForm';
 import { ChangePasswordForm } from './components/ChangePasswordForm';
 import { BookingCard } from './components/BookingCard';
-
-interface UserTicketDto {
-    ticketId: string;
-    ticketCode: string;
-    row: number;
-    seatNumber: number;
-    seatType: number;
-}
-
-interface UserBookingDto {
-    id: string;
-    bookingDate: string;
-    movieTitle: string;
-    movieImageUrl: string;
-    sessionStartTime: string;
-    hallName: string;
-    totalPrice: number;
-    tickets: UserTicketDto[];
-    isPast: boolean;
-}
 
 export const UserProfilePage: React.FC = () => {
     const [bookings, setBookings] = useState<UserBookingDto[]>([]);
@@ -38,12 +20,13 @@ export const UserProfilePage: React.FC = () => {
 
     const fetchMyBookings = async () => {
         try {
-            const response = await api.get<UserBookingDto[]>('/Bookings/my-bookings');
-            setBookings(response.data);
+            const data = await bookingsApi.getMyBookings();
+            setBookings(data);
             
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-                setUserSession(JSON.parse(storedUser));
+            const firstName = localStorage.getItem('firstName');
+            const lastName = localStorage.getItem('lastName');
+            if (firstName || lastName) {
+                setUserSession({ firstName: firstName || '', lastName: lastName || '' });
             }
         } catch (err) {
             console.error('Не вдалося завантажити історію замовлень:', err);
@@ -64,7 +47,7 @@ export const UserProfilePage: React.FC = () => {
         if (secondConfirm !== 'ВИДАЛИТИ') return;
 
         try {
-            await api.delete('/User/delete-account');
+            await usersApi.deleteAccount();
             alert('Аккаунт успішно видалено.');
             localStorage.clear();
             window.location.href = '/';
@@ -76,8 +59,8 @@ export const UserProfilePage: React.FC = () => {
     const handleDownloadAll = async (bookingId: string) => {
         setDownloadingId(bookingId);
         try {
-            const response = await api.get(`/Bookings/${bookingId}/tickets/download-all`, { responseType: 'blob' });
-            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const blobData = await bookingsApi.downloadTickets(bookingId);
+            const blob = new Blob([blobData], { type: 'application/pdf' });
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;
@@ -97,7 +80,7 @@ export const UserProfilePage: React.FC = () => {
         if (!window.confirm('Ви впевнені, що хочете повернути цей квиток?')) return;
         setCancellingTicketId(ticketId);
         try {
-            await api.post(`/Bookings/tickets/${ticketId}/cancel`);
+            await bookingsApi.cancelTicket(ticketId);
             alert('Квиток скасовано, кошти повернено!');
             await fetchMyBookings();
         } catch (err: any) {
@@ -115,8 +98,8 @@ export const UserProfilePage: React.FC = () => {
         );
     }
 
-    const upcomingBookings = bookings.filter((b) => !b.isPast && b.tickets.length > 0);
-    const pastBookings = bookings.filter((b) => b.isPast || b.tickets.length === 0);
+    const upcomingBookings = bookings.filter((b) => !(b as any).isPast && b.tickets && b.tickets.length > 0);
+    const pastBookings = bookings.filter((b) => (b as any).isPast || !b.tickets || b.tickets.length === 0);
 
     return (
         <div className="w-full min-h-screen bg-dark-bg text-white py-12 px-4 sm:px-6 lg:px-8 select-none animate-fadeIn">

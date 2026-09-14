@@ -1,17 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { CheckCircle2, XCircle, ShieldCheck, ScanLine, Film, MapPin, Armchair, ArrowRight } from 'lucide-react';
-import api from '@/api/axios';
-
-interface ScanResultDto {
-    isSuccess: boolean;
-    message: string;
-    movieTitle?: string;
-    hallName?: string;
-    row?: string;
-    number?: number;
-    startTime?: string;
-}
+import { bookingsApi } from '@/api/bookings';
+import type { ScanResultDto } from '@/types/bookings';
 
 export const CashierScannerPage: React.FC = () => {
     const [scanResult, setScanResult] = useState<ScanResultDto | null>(null);
@@ -33,10 +24,8 @@ export const CashierScannerPage: React.FC = () => {
             
             setIsProcessing(true);
             try {
-                const response = await api.post<ScanResultDto>('/Bookings/scan-ticket', {
-                    ticketCode: decodedText.trim()
-                });
-                setScanResult(response.data);
+                const data = await bookingsApi.scanTicket(decodedText.trim());
+                setScanResult(data);
             } catch (err: any) {
                 setScanResult({
                     isSuccess: false,
@@ -115,11 +104,11 @@ export const CashierScannerPage: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-2.5">
                                 <MapPin className="w-4 h-4 text-[#ffbd14]" />
-                                <span>Локація: <strong className="text-white font-semibold">{scanResult.hallName} (Початок о {scanResult.startTime})</strong></span>
+                                <span>Локація: <strong className="text-white font-semibold">{scanResult.hallName} (Початок о {(scanResult as any).startTime || (scanResult as any).scannedAt})</strong></span>
                             </div>
                             <div className="flex items-center gap-2.5">
                                 <Armchair className="w-4 h-4 text-[#ffbd14]" />
-                                <span>Посадочне місце: <strong className="text-emerald-400 font-black font-mono">Ряд {scanResult.row}, Місце {scanResult.number}</strong></span>
+                                <span>Посадочне місце: <strong className="text-emerald-400 font-black font-mono">Ряд {scanResult.row}, Місце {(scanResult as any).number || scanResult.seatNumber}</strong></span>
                             </div>
                         </div>
                     )}

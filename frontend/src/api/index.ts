@@ -1,8 +1,11 @@
+export { default as api } from './axios';
 export * from './auth';
 export * from './cinemas';
 export * from './movies';
-export * from './halls';
 export * from './sessions';
+export * from './halls';
 export * from './bookings';
 export * from './discounts';
-export * from './admin';
+export * from './analytics';
+export * from './audit';
+export * from './users';

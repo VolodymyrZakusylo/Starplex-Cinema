@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Clock, Film, Calendar, DollarSign, X } from 'lucide-react';
-import api from '@/api/axios';
+import { Plus, Clock, Film, DollarSign, X } from 'lucide-react';
+import { moviesApi } from '@/api/movies';
+import { cinemasApi } from '@/api/cinemas';
+import { hallsApi } from '@/api/halls';
+import { sessionsApi } from '@/api/sessions';
 import { useToast } from '@/hooks/useToast';
 
 import { ManualScheduleManager } from './components/ManualScheduleManager';
@@ -56,18 +59,18 @@ export const AdminSessionsPage: React.FC = () => {
     useEffect(() => {
         const initializeData = async () => {
             try {
-                const moviesRes = await api.get<MovieDto[]>('/Movies');
-                setMovies(moviesRes.data);
+                const moviesData = await moviesApi.getAll();
+                setMovies(moviesData);
 
                 if (isSuperAdmin) {
-                    const cinemasRes = await api.get<CinemaDto[]>('/Cinemas');
-                    setCinemas(cinemasRes.data);
+                    const cinemasData = await cinemasApi.getAll();
+                    setCinemas(cinemasData);
 
-                    if (cinemasRes.data.length > 0) {
-                        if (cinemaIdFromUrl && cinemasRes.data.some(c => c.id === cinemaIdFromUrl)) {
+                    if (cinemasData.length > 0) {
+                        if (cinemaIdFromUrl && cinemasData.some(c => c.id === cinemaIdFromUrl)) {
                             setSelectedCinemaId(cinemaIdFromUrl);
                         } else {
-                            setSelectedCinemaId(cinemasRes.data[0].id);
+                            setSelectedCinemaId(cinemasData[0].id);
                         }
                     }
                 } else if (user?.cinemaId) {
@@ -84,11 +87,11 @@ export const AdminSessionsPage: React.FC = () => {
         if (!selectedCinemaId) return;
         setIsLoading(true);
         try {
-            const hallsRes = await api.get<HallDto[]>(`/Halls/cinema/${selectedCinemaId}`);
-            setHalls(hallsRes.data.filter(h => h.isActive));
+            const hallsData = await hallsApi.getByCinema(selectedCinemaId);
+            setHalls(hallsData.filter(h => h.isActive));
 
-            const sessionsRes = await api.get<SessionDto[]>(`/Sessions/cinema/${selectedCinemaId}`);
-            setSessions(sessionsRes.data);
+            const sessionsData = await sessionsApi.getByCinema(selectedCinemaId);
+            setSessions(sessionsData);
         } catch (err) {
             showError('Не вдалося завантажити сеанси або зали.');
         } finally {
@@ -181,10 +184,10 @@ export const AdminSessionsPage: React.FC = () => {
 
         try {
             if (editingSession) {
-                await api.put(`/Sessions/${editingSession.id}`, payload);
+                await sessionsApi.update(editingSession.id, payload);
                 showSuccess('Сеанс успішно відредаговано.');
             } else {
-                await api.post('/Sessions', payload);
+                await sessionsApi.create(payload);
                 showSuccess('Новий сеанс успішно внесено до сітки залу.');
             }
             setIsModalOpen(false);
@@ -197,7 +200,7 @@ export const AdminSessionsPage: React.FC = () => {
     const handleDelete = async (id: string) => {
         confirm('Скасувати цей сеанс? Клієнтам автоматично повернуться кошти на картки.', async () => {
             try {
-                await api.delete(`/Sessions/${id}`);
+                await sessionsApi.delete(id);
                 showSuccess('Сеанс скасовано, кошти відправлено на повернення.');
                 fetchHallsAndSessions();
             } catch (err: any) {

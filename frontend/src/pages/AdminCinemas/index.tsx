@@ -1,15 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Edit2, Trash2, MapPin, Film as CinemaIcon, AlertCircle, X, Check, Globe } from 'lucide-react';
-import api from '@/api/axios';
+import { cinemasApi } from '@/api/cinemas';
+import type { CinemaDto } from '@/types/cinemas';
 import { useToast } from '@/hooks/useToast';
-
-interface CinemaDto {
-    id: string;
-    name: string;
-    city: string;
-    address: string;
-}
 
 export const AdminCinemasPage: React.FC = () => {
     const navigate = useNavigate();
@@ -29,8 +23,8 @@ export const AdminCinemasPage: React.FC = () => {
     const fetchCinemas = async () => {
         setIsLoading(true);
         try {
-            const response = await api.get<CinemaDto[]>('/Cinemas');
-            setCinemas(response.data);
+            const data = await cinemasApi.getAll();
+            setCinemas(data);
         } catch (err: any) {
             showError(err.response?.data?.message || 'Не вдалося завантажити список кінотеатрів.');
         } finally {
@@ -67,7 +61,7 @@ export const AdminCinemasPage: React.FC = () => {
         e.stopPropagation();
         confirm(`Ви впевнені, що хочете видалити кінотеатр "${cinemaName}"? Це може вплинути на пов'язані зали та сеанси!`, async () => {
             try {
-                await api.delete(`/Cinemas/${id}`);
+                await cinemasApi.delete(id);
                 showSuccess('Кінотеатр успішно видалено з мережі.');
                 fetchCinemas();
             } catch (err: any) {
@@ -87,7 +81,7 @@ export const AdminCinemasPage: React.FC = () => {
 
         try {
             if (isEditMode) {
-                await api.put(`/Cinemas/${selectedCinemaId}`, {
+                await cinemasApi.update(selectedCinemaId, {
                     id: selectedCinemaId,
                     name: name.trim(),
                     city: city.trim(),
@@ -95,7 +89,7 @@ export const AdminCinemasPage: React.FC = () => {
                 });
                 showSuccess('Дані кінотеатру успішно оновлено.');
             } else {
-                await api.post('/Cinemas', {
+                await cinemasApi.create({
                     name: name.trim(),
                     city: city.trim(),
                     address: address.trim()

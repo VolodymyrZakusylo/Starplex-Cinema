@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Clock, Award, Trash2, Edit2 } from 'lucide-react';
-import api from '@/api/axios';
+import { sessionsApi } from '@/api/sessions';
 import { useToast } from '@/hooks/useToast';
 import type { SessionDto, HallDto } from '@/types';
 
@@ -81,11 +81,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
         newStartTime.setUTCHours(hours, minutes, 0, 0);
 
         try {
-            await api.put('/Sessions/move', {
-                sessionId,
-                hallId: targetHallId,
-                newStartTime: newStartTime.toISOString()
-            });
+            await sessionsApi.move(sessionId, newStartTime.toISOString());
             onScheduleUpdated();
         } catch (err: any) {
             showError(err.response?.data?.message || 'Обраний слот уже зайнятий іншим сеансом.');

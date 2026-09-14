@@ -4,7 +4,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Ticket, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import api from '@/api/axios';
+import { bookingsApi } from '@/api/bookings';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
 
@@ -45,7 +45,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ bookingId, totalAmount, cli
                 setIsProcessing(false);
             } else if (paymentIntent && paymentIntent.status === 'succeeded') {
                 try {
-                    await api.post('/Bookings/confirm', { bookingId: bookingId });
+                    await bookingsApi.confirm(bookingId);
                     navigate('/booking/success', { state: { bookingId } });
                 } catch (backendError: any) {
                     console.error('Помилка підтвердження на бекенді:', backendError);

@@ -1,42 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import { DollarSign, Ticket, Calendar, RefreshCcw, TrendingUp, Building2, Monitor } from 'lucide-react';
-import api from '@/api/axios';
+import { analyticsApi } from '@/api/analytics';
+import { cinemasApi } from '@/api/cinemas';
+import type { AdminStatsDto } from '@/types/admin';
+import type { CinemaDto } from '@/types/cinemas';
 import { useToast } from '@/hooks/useToast';
-
-interface RevenueChartItem {
-    date: string;
-    revenue: number;
-    ticketsCount: number;
-}
-
-interface MoviePopularity {
-    movieTitle: string;
-    ticketsSold: number;
-    earnings: number;
-}
-
-interface SeatTypeBreakdown {
-    type: string;
-    count: number;
-    revenue: number;
-}
-
-interface AdminStatsDto {
-    totalRevenue: number;
-    totalTicketsSold: number;
-    activeSessionsCount: number;
-    refundedAmount: number;
-    averageOrderValue: number;
-    revenueChart: RevenueChartItem[];
-    topMovies: MoviePopularity[];
-    seatTypeStats: SeatTypeBreakdown[];
-}
-
-interface CinemaDto {
-    id: string;
-    name: string;
-}
 
 const COLORS = ['#3B82F6', '#10B981', '#EF4444', '#F59E0B'];
 
@@ -52,8 +21,8 @@ export const AdminDashboardPage: React.FC = () => {
     useEffect(() => {
         const fetchCinemas = async () => {
             try {
-                const response = await api.get<CinemaDto[]>('/Cinemas');
-                setCinemas(response.data);
+                const data = await cinemasApi.getAll();
+                setCinemas(data);
             } catch (err) {
                 showError('Не вдалося завантажити перелік кінотеатрів мережі.');
             }
@@ -65,12 +34,12 @@ export const AdminDashboardPage: React.FC = () => {
         const fetchStats = async () => {
             setIsLoading(true);
             try {
-                let url = `/Analytics/admin-stats?days=${daysPeriod}&isOnline=${salesSource}`;
-                if (selectedCinema !== 'all') {
-                    url += `&cinemaId=${selectedCinema}`;
-                }
-                const response = await api.get<AdminStatsDto>(url);
-                setStats(response.data);
+                const data = await analyticsApi.getAdminStats({
+                    days: daysPeriod,
+                    isOnline: salesSource,
+                    cinemaId: selectedCinema
+                });
+                setStats(data);
             } catch (err) {
                 showError('Помилка при оновленні фінансових аналітичних даних.');
             } finally {
@@ -246,7 +215,7 @@ export const AdminDashboardPage: React.FC = () => {
                                             dataKey="count"
                                             nameKey="type"
                                         >
-                                            {stats.seatTypeStats.map((entry, index) => (
+                                            {stats.seatTypeStats.map((_, index) => (
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>

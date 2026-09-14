@@ -1,6 +1,6 @@
 import React from 'react';
 import { Ban } from 'lucide-react';
-import type { SeatMapDto } from '../types';
+import type { SeatMapDto } from '@/types/bookings';
 
 interface SeatGridProps {
     seats: SeatMapDto[];
@@ -9,7 +9,7 @@ interface SeatGridProps {
     isCashierMode: boolean;
     onSeatClick: (seat: SeatMapDto) => void;
     onOpenHistory: () => void;
-    isSalesLoading: boolean;
+    isSalesLoading?: boolean;
 }
 
 export const SeatGrid: React.FC<SeatGridProps> = ({
@@ -19,7 +19,7 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
     isCashierMode,
     onSeatClick,
     onOpenHistory,
-    isSalesLoading
+    isSalesLoading: _isSalesLoading
 }) => {
     const rows = Array.from(new Set(seats.map((s) => s.row)));
 

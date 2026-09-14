@@ -3,13 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { HubConnection, HubConnectionBuilder, LogLevel, HubConnectionState } from '@microsoft/signalr';
 import { useAuthStore } from '@/store/authStore';
 import { useToast } from '@/hooks/useToast';
-import api from '@/api/axios';
+import { bookingsApi } from '@/api/bookings';
+import { discountsApi } from '@/api/discounts';
 
 import { SeatGrid } from './components/SeatGrid';
 import { OrderSidebar } from './components/OrderSidebar';
-import { History, X, RefreshCw } from 'lucide-react';
 
-import type { SeatMapDto, CashierSaleDto, BookingResponseDto, SignalRSeatsLockedDto, SignalRSeatsReleasedDto } from './types';
+import type { SeatMapDto, CashierSaleDto, SignalRSeatsLockedDto, SignalRSeatsReleasedDto } from '@/types/bookings';
 
 const getUserIdFromToken = (): string | null => {
     const token = localStorage.getItem('token');
@@ -44,7 +44,7 @@ export const BookingPage: React.FC = () => {
     const [lastBookingId, setLastBookingId] = useState<string | null>(null);
 
     const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
-    const [cashierSales, setCashierSales] = useState<CashierSaleDto[]>([]);
+    const [, setCashierSales] = useState<CashierSaleDto[]>([]);
     const [isSalesLoading, setIsSalesLoading] = useState<boolean>(false);
 
     const [promoCode, setPromoCode] = useState<string>('');
@@ -61,11 +61,11 @@ export const BookingPage: React.FC = () => {
         if (!sessionId) return;
         setIsLoading(true);
         try {
-            const response = await api.get<SeatMapDto[]>(`/Bookings/session/${sessionId}/seats`);
-            setSeats(response.data);
+            const data = await bookingsApi.getSeats(sessionId);
+            setSeats(data);
 
             if (currentUserId) {
-                const myLockedSeats = response.data.filter(
+                const myLockedSeats = data.filter(
                     (s) => s.status === 'Locked' && s.lockedByUserId?.toLowerCase() === currentUserId.toLowerCase()
                 );
                 setSelectedSeats(myLockedSeats);
@@ -81,8 +81,8 @@ export const BookingPage: React.FC = () => {
         if (!isCashierMode) return;
         setIsSalesLoading(true);
         try {
-            const response = await api.get<CashierSaleDto[]>('/Bookings/cashier-sales');
-            setCashierSales(response.data);
+            const data = await bookingsApi.getCashierSales();
+            setCashierSales(data);
         } catch (err) {
             showError('Не вдалося отримати лог касової зміни.');
         } finally {
@@ -125,7 +125,7 @@ export const BookingPage: React.FC = () => {
 
                 const handleSeatsReleased = (data: SignalRSeatsReleasedDto) => {
                     if (!data?.seatIds) return;
-                    setSeats((prev) => prev.map((s) => data.seatIds.includes(s.seatId) ? { ...s, status: 'Available', lockedByUserId: null } : s));
+                    setSeats((prev) => prev.map((s) => data.seatIds.includes(s.seatId) ? { ...s, status: 'Available', lockedByUserId: undefined } : s));
                     setSelectedSeats((prev) => prev.filter((s) => !data.seatIds.includes(s.seatId)));
                 };
 
@@ -150,16 +150,17 @@ export const BookingPage: React.FC = () => {
     const handleSeatClick = async (seat: SeatMapDto) => {
         const isSelected = selectedSeats.some((s) => s.seatId === seat.seatId);
         try {
-            const url = isSelected ? '/Bookings/unlock' : '/Bookings/lock';
-            const response = await api.post<{ isSuccess: boolean }>(url, { sessionId, seatIds: [seat.seatId] });
+            const isSuccess = isSelected 
+                ? await bookingsApi.unlockSeat(sessionId!, seat.seatId)
+                : await bookingsApi.lockSeat(sessionId!, seat.seatId);
             
-            if (response.data.isSuccess) {
+            if (isSuccess) {
                 if (isSelected) {
                     setSelectedSeats((p) => p.filter((s) => s.seatId !== seat.seatId));
-                    setSeats((p) => p.map((s) => s.seatId === seat.seatId ? { ...s, status: 'Available', lockedByUserId: null } : s));
+                    setSeats((p) => p.map((s) => s.seatId === seat.seatId ? { ...s, status: 'Available', lockedByUserId: undefined } : s));
                 } else {
                     setSelectedSeats((p) => [...p, seat]);
-                    setSeats((p) => p.map((s) => s.seatId === seat.seatId ? { ...s, status: 'Locked', lockedByUserId: currentUserId } : s));
+                    setSeats((p) => p.map((s) => s.seatId === seat.seatId ? { ...s, status: 'Locked', lockedByUserId: currentUserId || undefined } : s));
                 }
             }
         } catch (err: any) {
@@ -173,9 +174,9 @@ export const BookingPage: React.FC = () => {
         setPromoError(null);
         setPromoSuccess(null);
         try {
-            const res = await api.get<{ percentage: number }>(`/Discounts/validate/${promoCode.trim()}`);
-            setDiscountPercentage(res.data.percentage);
-            setPromoSuccess(`Активувано знижку ${res.data.percentage}%`);
+            const res = await discountsApi.validate(promoCode.trim());
+            setDiscountPercentage(res.percentage);
+            setPromoSuccess(`Активувано знижку ${res.percentage}%`);
         } catch (err: any) {
             setPromoError(err.response?.data?.message || 'Промокод не діє.');
         } finally {
@@ -187,12 +188,12 @@ export const BookingPage: React.FC = () => {
         if (selectedSeats.length === 0 || !sessionId) return;
         setIsSubmitting(true);
         try {
-            const res = await api.post<BookingResponseDto>('/Bookings/create', {
+            const res = await bookingsApi.create(
                 sessionId,
-                seatIds: selectedSeats.map((s) => s.seatId),
-                promoCode: discountPercentage > 0 ? promoCode.trim() : undefined
-            });
-            navigate(`/booking/payment?clientSecret=${res.data.clientSecret}`, { state: res.data });
+                selectedSeats.map((s) => s.seatId),
+                discountPercentage > 0 ? promoCode.trim() : undefined
+            );
+            navigate(`/booking/payment?clientSecret=${res.clientSecret}`, { state: res });
         } catch (err: any) {
             showError(err.response?.data?.Message || 'Не вдалося створити квитки.');
         } finally {
@@ -202,10 +203,10 @@ export const BookingPage: React.FC = () => {
 
     const triggerTicketPrint = async (id: string) => {
         try {
-            const res = await api.get(`/Bookings/${id}/tickets/download-all`, { responseType: 'blob' });
+            const blobData = await bookingsApi.downloadTickets(id);
             const iframe = document.createElement('iframe');
             iframe.style.position = 'fixed'; iframe.style.top = '-10000px';
-            iframe.src = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+            iframe.src = window.URL.createObjectURL(new Blob([blobData], { type: 'application/pdf' }));
             iframe.onload = () => { iframe.contentWindow?.print(); };
             document.body.appendChild(iframe);
         } catch {
@@ -217,9 +218,9 @@ export const BookingPage: React.FC = () => {
         if (selectedSeats.length === 0 || !sessionId) return;
         setIsSubmitting(true);
         try {
-            const res = await api.post<string>('/Bookings/cashier-sell', { sessionId, seatIds: selectedSeats.map((s) => s.seatId), paymentMethod: cashierPaymentMethod });
-            setLastBookingId(res.data);
-            await triggerTicketPrint(res.data);
+            const bookingId = await bookingsApi.cashierSell(sessionId, selectedSeats.map((s) => s.seatId), cashierPaymentMethod);
+            setLastBookingId(bookingId);
+            await triggerTicketPrint(bookingId);
             setSelectedSeats([]);
             showSuccess('Касовий POS-продаж успішно завершено!');
             fetchSeatMap();

@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { CheckCircle2, Download, Home, AlertCircle } from 'lucide-react';
-import api from '@/api/axios';
+import { bookingsApi } from '@/api/bookings';
 
 export const BookingSuccessPage: React.FC = () => {
     const location = useLocation();
-    const navigate = useNavigate();
 
     const [isDownloading, setIsDownloading] = useState<boolean>(false);
     const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -27,11 +26,8 @@ export const BookingSuccessPage: React.FC = () => {
         setIsDownloading(true);
         setDownloadError(null);
         try {
-            const response = await api.get(`/Bookings/${bookingId}/tickets/download-all`, {
-                responseType: 'blob',
-            });
-
-            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const blobData = await bookingsApi.downloadTickets(bookingId);
+            const blob = new Blob([blobData], { type: 'application/pdf' });
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;

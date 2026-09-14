@@ -1,16 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Calendar, DollarSign, Film, Sliders, AlertTriangle } from 'lucide-react';
-import api from '@/api/axios';
+import { moviesApi } from '@/api/movies';
+import { sessionsApi } from '@/api/sessions';
 import { useToast } from '@/hooks/useToast';
-import type { CinemaDto } from '@/types';
-
-interface MovieShortDto {
-    id: string;
-    title: string;
-    genre: string;
-    durationInMinutes: number;
-    status: number;
-}
+import type { CinemaDto } from '@/types/cinemas';
+import type { MovieShortDto } from '@/types/movies';
 
 interface ScheduleGenerationPanelProps {
     currentCinemaId: string;
@@ -46,8 +40,8 @@ export const ScheduleGenerationPanel: React.FC<ScheduleGenerationPanelProps> = (
         const loadMovies = async () => {
             setIsLoading(true);
             try {
-                const moviesRes = await api.get<MovieShortDto[]>('/Movies');
-                setMovies(moviesRes.data.filter(m => m.status === 1));
+                const data = await moviesApi.getShortList();
+                setMovies(data.filter(m => m.status === 1));
             } catch (err) {
                 showError('Не вдалося проаналізувати активні кінорелізи.');
             } finally {
@@ -80,20 +74,17 @@ export const ScheduleGenerationPanel: React.FC<ScheduleGenerationPanelProps> = (
         setStatusMessage(null);
 
         try {
-            const response = await api.post<{ success: boolean, count: number, message: string }>(
-                '/Sessions/generate-schedule',
-                {
-                    cinemaId: selectedCinemaId,
-                    targetDate: new Date(targetDate).toISOString(),
-                    basePrice: basePrice,
-                    movieIds: selectedMovieIds
-                }
-            );
+            const data = await sessionsApi.generateSchedule({
+                cinemaId: selectedCinemaId,
+                targetDate: new Date(targetDate).toISOString(),
+                basePrice: basePrice,
+                movieIds: selectedMovieIds
+            });
 
             showSuccess(`Успішно сформовано новий розклад!`);
             setStatusMessage({
                 type: 'success',
-                text: `🎉 Смарт-алгоритм успішно розрахував і згенерував ${response.data.count} сеансів! Розклад оптимізовано під робочі години (10:00 - 23:00) та інтегровано динамічні тарифи прайм-тайму.`
+                text: `🎉 Смарт-алгоритм успішно розрахував і згенерував ${data.count} сеансів! Розклад оптимізовано під робочі години (10:00 - 23:00) та інтегровано динамічні тарифи прайм-тайму.`
             });
             setSelectedMovieIds([]);
             onScheduleGenerated();

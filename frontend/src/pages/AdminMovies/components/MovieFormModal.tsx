@@ -1,21 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, AlignLeft, ShieldCheck, Tv, Upload, Link } from 'lucide-react';
-import api from '@/api/axios';
+import { Clock, Tv, Upload, Link } from 'lucide-react';
+import { moviesApi } from '@/api/movies';
+import type { MovieDto } from '@/types/movies';
 import { useToast } from '@/hooks/useToast';
-
-interface MovieDto {
-    id: string;
-    title: string;
-    description?: string;
-    durationInMinutes: number;
-    posterUrl: string;
-    effectivePosterUrl?: string;
-    backdropUrl?: string;
-    genre?: string;
-    trailerUrl?: string;
-    ageRating?: string;
-    status: number;
-}
 
 interface MovieFormModalProps {
     editingMovie: MovieDto | null;
@@ -120,14 +107,10 @@ export const MovieFormModal: React.FC<MovieFormModalProps> = ({ editingMovie, on
         try {
             if (editingMovie) {
                 formData.append('command.Id', editingMovie.id);
-                await api.put(`/Movies/${editingMovie.id}`, formData, { 
-                    headers: { 'Content-Type': 'multipart/form-data' } 
-                });
+                await moviesApi.update(editingMovie.id, formData);
                 showSuccess('Дані фільму успішно оновлено!');
             } else {
-                await api.post('/Movies', formData, { 
-                    headers: { 'Content-Type': 'multipart/form-data' } 
-                });
+                await moviesApi.create(formData);
                 showSuccess('Новий фільм додано до каталогу!');
             }
             onRefresh();
