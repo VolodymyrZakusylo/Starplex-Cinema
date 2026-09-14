@@ -4,6 +4,7 @@ using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
 using StarPlex.Domain.Enums;
+using StarPlex.Domain.Services;
 
 namespace StarPlex.Application.Features.Bookings.Commands.CreateCashierSale;
 
@@ -47,14 +48,7 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
 
         foreach (var seat in seats)
         {
-            decimal multiplier = seat.Type switch
-            {
-                SeatType.VIP => 1.5m,
-                SeatType.Disabled => 0.8m,
-                _ => 1.0m
-            };
-
-            totalPrice += session.BasePrice * multiplier;
+            totalPrice += PricingCalculator.CalculateTicketPrice(session.BasePrice, seat.Type);
 
             var bookingSeat = new BookingSeat(bookingId, seat.Id) { Id = Guid.NewGuid() };
             bookingSeats.Add(bookingSeat);

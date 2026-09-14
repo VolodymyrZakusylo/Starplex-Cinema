@@ -4,6 +4,7 @@ using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Features.Sessions.DTOs;
 using StarPlex.Domain.Enums;
+using StarPlex.Domain.Services;
 
 namespace StarPlex.Application.Features.Sessions.Queries.GetSessionSeatMap;
 
@@ -79,12 +80,7 @@ public class GetSessionSeatMapQueryHandler : IRequestHandler<GetSessionSeatMapQu
                 }
             }
 
-            decimal priceMultiplier = seat.Type switch
-            {
-                SeatType.VIP => 1.5m,
-                SeatType.Disabled => 0.8m,
-                _ => 1.0m
-            };
+            decimal priceMultiplier = PricingCalculator.GetSeatMultiplier(seat.Type);
 
             int.TryParse(seat.Row, out var parsedRow);
 
