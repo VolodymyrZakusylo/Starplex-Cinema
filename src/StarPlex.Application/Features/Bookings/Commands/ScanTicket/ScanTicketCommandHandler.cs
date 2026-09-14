@@ -37,48 +37,26 @@ public class ScanTicketCommandHandler : IRequestHandler<ScanTicketCommand, ScanT
         var booking = ticket.BookingSeat.Booking;
         var session = booking.Session;
 
-        if (booking.Status != BookingStatus.Confirmed)
-        {
-            return new ScanTicketResultDto
-            {
-                IsSuccess = false,
-                Message = $"Access Denied: Ticket status is '{booking.Status}'. It must be Confirmed."
-            };
-        }
-
-        if (ticket.IsUsed)
-        {
-            return new ScanTicketResultDto
-            {
-                IsSuccess = false,
-                Message = "Already Scanned: This ticket has already been marked as USED!"
-            };
-        }
-
         var utcNow = DateTime.UtcNow;
-        var allowedEntryStart = session.StartTime.AddMinutes(-15);
-        var sessionEndTime = session.StartTime.AddMinutes(session.MovieDurationInMinutes);
+        var scanResult = ticket.Scan(utcNow, session);
 
-        if (utcNow < allowedEntryStart)
+        if (scanResult != ScanTicketResult.Success)
         {
-            var minutesToWait = (int)Math.Ceiling((session.StartTime - utcNow).TotalMinutes);
+            string errorMessage = scanResult switch
+            {
+                ScanTicketResult.InvalidStatus => $"Access Denied: Ticket status is '{booking.Status}'. It must be Confirmed.",
+                ScanTicketResult.AlreadyScanned => "Already Scanned: This ticket has already been marked as USED!",
+                ScanTicketResult.TooEarly => $"Too Early: Entrance is allowed 15 minutes before the show. Please wait {(int)Math.Ceiling((session.StartTime - utcNow).TotalMinutes)} more min.",
+                ScanTicketResult.Expired => "Expired: This movie session has already ended.",
+                _ => "Access Denied."
+            };
+
             return new ScanTicketResultDto
             {
                 IsSuccess = false,
-                Message = $"Too Early: Entrance is allowed 15 minutes before the show. Please wait {minutesToWait} more min."
+                Message = errorMessage
             };
         }
-
-        if (utcNow > sessionEndTime)
-        {
-            return new ScanTicketResultDto
-            {
-                IsSuccess = false,
-                Message = "Expired: This movie session has already ended."
-            };
-        }
-
-        ticket.IsUsed = true;
         await _context.SaveChangesAsync(cancellationToken);
 
         return new ScanTicketResultDto
