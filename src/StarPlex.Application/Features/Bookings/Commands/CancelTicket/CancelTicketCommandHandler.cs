@@ -39,7 +39,7 @@ public class CancelTicketCommandHandler : IRequestHandler<CancelTicketCommand, b
         var booking = ticket.BookingSeat.Booking;
 
         if (booking.UserId != request.UserId) return false;
-        if (DateTime.UtcNow >= booking.Session.StartTime.AddMinutes(-60)) return false;
+        if (!booking.CanCancel(DateTime.UtcNow)) return false;
         if (booking.Payment == null || string.IsNullOrEmpty(booking.Payment.StripePaymentIntentId)) return false;
 
         decimal baseTicketPrice = PricingCalculator.CalculateTicketPrice(booking.Session.BasePrice, ticket.BookingSeat.Seat.Type);
@@ -74,16 +74,13 @@ public class CancelTicketCommandHandler : IRequestHandler<CancelTicketCommand, b
         _context.Tickets.Remove(ticket);
         _context.BookingSeats.Remove(ticket.BookingSeat);
 
-        var hasOtherSeats = await _context.BookingSeats
-            .AnyAsync(bs => bs.BookingId == booking.Id && bs.Id != ticket.BookingSeatId, cancellationToken);
+        var remainingSeatsCount = await _context.BookingSeats
+            .CountAsync(bs => bs.BookingId == booking.Id && bs.Id != ticket.BookingSeatId, cancellationToken);
 
-        if (!hasOtherSeats)
+        booking.CancelIfEmpty(remainingSeatsCount);
+        if (remainingSeatsCount == 0 && booking.Payment != null)
         {
-            booking.Status = BookingStatus.Cancelled;
-            if (booking.Payment != null)
-            {
-                booking.Payment.Status = PaymentStatus.Refunded;
-            }
+            booking.Payment.Status = PaymentStatus.Refunded;
         }
 
         await _context.SaveChangesAsync(cancellationToken);
