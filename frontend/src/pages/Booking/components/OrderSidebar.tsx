@@ -1,6 +1,6 @@
 import React from 'react';
 import { CreditCard, Banknote, Percent, CheckCircle } from 'lucide-react';
-import type { SeatMapDto } from '../types';
+import type { SeatMapDto } from '@/types/bookings';
 
 interface OrderSidebarProps {
     selectedSeats: SeatMapDto[];
@@ -42,7 +42,7 @@ export const OrderSidebar: React.FC<OrderSidebarProps> = ({
     onTriggerPrint
 }) => {
     const calculateTotalPrice = () => {
-        const baseTotal = selectedSeats.reduce((sum, seat) => sum + basePrice * seat.priceMultiplier, 0);
+        const baseTotal = selectedSeats.reduce((sum, seat) => sum + basePrice * (seat.priceMultiplier ?? 1), 0);
         if (discountPercentage > 0) {
             return baseTotal - Math.round(baseTotal * (discountPercentage / 100));
         }
@@ -66,7 +66,7 @@ export const OrderSidebar: React.FC<OrderSidebarProps> = ({
                                 <p className="text-white">Ряд {seat.row}, Місце {seat.seatNumber}</p>
                                 <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-0.5">{seat.seatType} крісло</p>
                             </div>
-                            <p className="font-bold text-[#ffbd14]">{basePrice * seat.priceMultiplier} ₴</p>
+                            <p className="font-bold text-[#ffbd14]">{basePrice * (seat.priceMultiplier ?? 1)} ₴</p>
                         </div>
                     ))
                 )}

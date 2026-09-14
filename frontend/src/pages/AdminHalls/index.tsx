@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Edit2, CheckCircle, XCircle, LayoutGrid, AlertCircle, Calendar, Armchair, Ban } from 'lucide-react';
-import api from '@/api/axios';
+import { hallsApi } from '@/api/halls';
+import { cinemasApi } from '@/api/cinemas';
 import { useToast } from '@/hooks/useToast';
 import type { HallDto, CinemaDto, AdminSeatDto } from '@/types';
 import { 
@@ -50,14 +51,14 @@ export const AdminHallsPage: React.FC = () => {
                 const userHasSuperAdmin = user.roles && user.roles.includes('SuperAdmin');
 
                 if (userHasSuperAdmin) {
-                    const response = await api.get<CinemaDto[]>('/Cinemas');
-                    setCinemas(response.data);
+                    const data = await cinemasApi.getAll();
+                    setCinemas(data);
 
-                    if (response.data && response.data.length > 0) {
-                        if (cinemaIdFromUrl && response.data.some(c => c.id === cinemaIdFromUrl)) {
+                    if (data && data.length > 0) {
+                        if (cinemaIdFromUrl && data.some(c => c.id === cinemaIdFromUrl)) {
                             setSelectedCinemaId(cinemaIdFromUrl);
                         } else {
-                            setSelectedCinemaId(response.data[0].id);
+                            setSelectedCinemaId(data[0].id);
                         }
                     } else {
                         setApiError('База даних повернула порожній список кінотеатрів.');
@@ -84,8 +85,8 @@ export const AdminHallsPage: React.FC = () => {
         if (!selectedCinemaId) return;
         setIsLoading(true);
         try {
-            const response = await api.get<HallDto[]>( `/Halls/cinema/${selectedCinemaId}`);
-            setHalls(response.data);
+            const data = await hallsApi.getByCinema(selectedCinemaId);
+            setHalls(data);
             setActiveHallIdForSeats(null);
             setSelectedSeatForEdit(null);
         } catch (err: any) {
@@ -112,8 +113,8 @@ export const AdminHallsPage: React.FC = () => {
         setSelectedSeatForEdit(null);
         setIsSeatsLoading(true);
         try {
-            const response = await api.get<HallDto>(`/Halls/${hallId}`);
-            setHallSeats(response.data.seats || []);
+            const data = await hallsApi.getById(hallId);
+            setHallSeats(data.seats || []);
         } catch (err) {
             showError('Не вдалося завантажити інтерактивну розкладку крісел зали.');
         } finally {
@@ -126,7 +127,7 @@ export const AdminHallsPage: React.FC = () => {
         const numericStatus = SeatStatusReverseMap[updatedStatusStr];
 
         try {
-            await api.put(`/Halls/seats/${seatId}/properties`, {
+            await hallsApi.updateSeatProperties(seatId, {
                 type: numericType,
                 status: numericStatus
             });
@@ -191,10 +192,10 @@ export const AdminHallsPage: React.FC = () => {
 
         try {
             if (editingHall) {
-                await api.put(`/Halls/${editingHall.id}`, payload);
+                await hallsApi.update(editingHall.id, payload);
                 showSuccess('Геометрію залу успішно переконфігуровано.');
             } else {
-                await api.post('/Halls', payload);
+                await hallsApi.create(payload);
                 showSuccess('Новий кінозал успішно додано до системи.');
             }
             setIsModalOpen(false);
@@ -207,7 +208,7 @@ export const AdminHallsPage: React.FC = () => {
     const handleDelete = (id: string) => {
         confirm('Ви впевнені, що хочете повністю видалити цей зал разом із усіма місцями? Дію не можна буде скасувати.', async () => {
             try {
-                await api.delete(`/Halls/${id}`);
+                await hallsApi.delete(id);
                 showSuccess('Кінозал повністю видалено з системи.');
                 fetchHalls();
             } catch (err: any) {
@@ -218,7 +219,7 @@ export const AdminHallsPage: React.FC = () => {
 
     const toggleHallStatus = async (hall: HallDto) => {
         try {
-            await api.put(`/Halls/${hall.id}`, {
+            await hallsApi.update(hall.id, {
                 id: hall.id,
                 cinemaId: hall.cinemaId,
                 name: hall.name,

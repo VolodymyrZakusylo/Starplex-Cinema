@@ -1,28 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ShieldAlert, RefreshCw, Layers, Calendar, UserCheck, Activity, Search, FilterX, ChevronLeft, ChevronRight } from 'lucide-react';
-import api from '@/api/axios';
+import { auditApi } from '@/api/audit';
+import type { AuditLogDto, PagedResponse } from '@/types/admin';
 import { useToast } from '@/hooks/useToast';
-
-interface AuditLogDto {
-    id: string;
-    userId: string;
-    userEmail: string;
-    action: string;
-    entityName: string;
-    entityId: string;
-    timestamp: string;
-}
-
-interface PagedResponse {
-    items: AuditLogDto[];
-    pageNumber: number;
-    totalPages: number;
-    totalCount: number;
-}
 
 export const AdminAuditLogsPage: React.FC = () => {
     const { showError } = useToast();
-    const [logsData, setLogsData] = useState<PagedResponse | null>(null);
+    const [logsData, setLogsData] = useState<PagedResponse<AuditLogDto> | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
     const [searchUser, setSearchUser] = useState<string>('');
@@ -33,16 +17,14 @@ export const AdminAuditLogsPage: React.FC = () => {
     const loadData = useCallback(async (page: number, entity: string, action: string, user: string) => {
         setIsLoading(true);
         try {
-            const response = await api.get<PagedResponse>('/Audit/logs', {
-                params: {
-                    pageNumber: page,
-                    pageSize: 15,
-                    searchUser: user || undefined,
-                    entityName: entity,
-                    actionType: action
-                }
+            const data = await auditApi.getLogs({
+                pageNumber: page,
+                pageSize: 15,
+                searchUser: user || undefined,
+                entityName: entity,
+                actionType: action
             });
-            setLogsData(response.data);
+            setLogsData(data);
         } catch (err: any) {
             showError(err.response?.data?.message || 'Не вдалося завантажити системні логи.');
         } finally {

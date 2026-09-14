@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, Edit2, Calendar, LayoutGrid, Clock } from 'lucide-react';
+import { Trash2, Edit2, LayoutGrid, Clock } from 'lucide-react';
 import type { SessionDto, HallDto } from '@/types';
 
 interface ManualScheduleManagerProps {

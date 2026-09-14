@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Ticket, Plus, Trash2, Calendar, RefreshCw } from 'lucide-react';
-import api from '@/api/axios';
+import { discountsApi } from '@/api/discounts';
 import { useToast } from '@/hooks/useToast';
-import type { DiscountDto } from '@/types';
+import type { DiscountDto } from '@/types/discounts';
 
 export const AdminPromoCodesPage: React.FC = () => {
   const { confirm, showError, showSuccess } = useToast();
@@ -19,8 +19,8 @@ export const AdminPromoCodesPage: React.FC = () => {
   const fetchPromoCodes = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get<DiscountDto[]>('/Discounts');
-      setPromos(response.data);
+      const data = await discountsApi.getAll();
+      setPromos(data);
     } catch (err: any) {
       showError(err.response?.data?.message || 'Не вдалося завантажити перелік промокодів.');
     } finally {
@@ -44,7 +44,7 @@ export const AdminPromoCodesPage: React.FC = () => {
     if (!code || !name) return;
 
     try {
-      await api.post('/Discounts/create', {
+      await discountsApi.create({
         code: code.toUpperCase().trim(),
         name: name.trim(),
         percentage,
@@ -66,7 +66,7 @@ export const AdminPromoCodesPage: React.FC = () => {
   const handleDeletePromo = (id: string) => {
     confirm('Ви впевнені, що хочете деактивувати та остаточно видалити цей промокод? Клієнти більше не зможуть його застосувати.', async () => {
       try {
-        await api.delete(`/Discounts/${id}`);
+        await discountsApi.delete(id);
         showSuccess('Промокод успішно видалено.');
         fetchPromoCodes();
       } catch (err) {

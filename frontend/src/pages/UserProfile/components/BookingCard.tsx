@@ -1,25 +1,6 @@
 import React from 'react';
 import { Download } from 'lucide-react';
-
-interface UserTicketDto {
-    ticketId: string;
-    ticketCode: string;
-    row: number;
-    seatNumber: number;
-    seatType: number;
-}
-
-interface UserBookingDto {
-    id: string;
-    bookingDate: string;
-    movieTitle: string;
-    movieImageUrl: string;
-    sessionStartTime: string;
-    hallName: string;
-    totalPrice: number;
-    tickets: UserTicketDto[];
-    isPast: boolean;
-}
+import type { UserBookingDto } from '@/types/bookings';
 
 interface BookingCardProps {
     booking: UserBookingDto;
@@ -33,42 +14,48 @@ interface BookingCardProps {
 export const BookingCard: React.FC<BookingCardProps> = ({ 
     booking, onDownload, downloadingId, onCancelTicket, cancellingTicketId, isPast 
 }) => {
-    const formattedDate = new Date(booking.sessionStartTime).toLocaleString('uk-UA', {
+    const sessionTime = (booking as any).sessionStartTime || (booking as any).sessionTime;
+    const formattedDate = sessionTime ? new Date(sessionTime).toLocaleString('uk-UA', {
         day: 'numeric', 
         month: 'long', 
         year: 'numeric', 
         hour: '2-digit', 
         minute: '2-digit',
         timeZone: 'UTC' 
-    });
+    }) : '';
+
+    const movieImageUrl = (booking as any).movieImageUrl || (booking as any).moviePosterUrl;
+    const movieTitle = (booking as any).movieTitle || 'Фільм';
+    const hallName = (booking as any).hallName || 'Зал';
 
     return (
         <div className="bg-dark-secondary border border-white/5 rounded-2xl p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between shadow-xl relative overflow-hidden">
             <div className="flex gap-4 items-start w-full">
                 <div className="flex-shrink-0">
-                    {booking.movieImageUrl ? (
-                        <img src={booking.movieImageUrl} alt={booking.movieTitle} className="w-16 h-24 object-cover rounded-xl border border-white/10 shadow-md" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                    {movieImageUrl ? (
+                        <img src={movieImageUrl} alt={movieTitle} className="w-16 h-24 object-cover rounded-xl border border-white/10 shadow-md" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                     ) : (
                         <div className="w-16 h-24 bg-dark-bg border border-white/10 rounded-xl flex items-center justify-center text-2xl shadow-inner text-white/20">🎬</div>
                     )}
                 </div>
                 <div className="flex-grow">
-                    <h3 className="text-lg font-bold text-white tracking-tight">{booking.movieTitle}</h3>
+                    <h3 className="text-lg font-bold text-white tracking-tight">{movieTitle}</h3>
                     <p className="text-accent-gold text-sm font-medium mt-1">{formattedDate}</p>
-                    <p className="text-text-muted text-xs mt-1">🏛 {booking.hallName} · № {booking.id.substring(0, 8).toUpperCase()}</p>
+                    <p className="text-text-muted text-xs mt-1">🏛 {hallName} · № {booking.id.substring(0, 8).toUpperCase()}</p>
 
                     <div className="flex flex-wrap gap-2 mt-4">
-                        {booking.tickets.length === 0 ? (
+                        {!booking.tickets || booking.tickets.length === 0 ? (
                             <span className="text-[10px] uppercase tracking-wider text-red-400 font-bold bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">Усі квитки скасовано (Повернення)</span>
                         ) : (
-                            booking.tickets.map((t) => {
-                                const isThisCancelling = cancellingTicketId === t.ticketId;
+                            booking.tickets.map((t: any) => {
+                                const ticketId = t.ticketId || t.id;
+                                const isThisCancelling = cancellingTicketId === ticketId;
                                 return (
-                                    <div key={t.ticketId} className="group flex items-center bg-dark-bg border border-white/5 pl-2.5 pr-1.5 py-1 rounded-xl text-[11px] text-text-muted hover:border-red-500/30 hover:text-white transition-all">
+                                    <div key={ticketId} className="group flex items-center bg-dark-bg border border-white/5 pl-2.5 pr-1.5 py-1 rounded-xl text-[11px] text-text-muted hover:border-red-500/30 hover:text-white transition-all">
                                         <span>Ряд {t.row}, Місце {t.seatNumber}</span>
                                         {!isPast && (
                                             <button
-                                                onClick={() => onCancelTicket(t.ticketId)}
+                                                onClick={() => onCancelTicket(ticketId)}
                                                 disabled={cancellingTicketId !== null}
                                                 className="ml-2 p-1 text-gray-500 hover:text-red-400 transition-colors disabled:cursor-not-allowed border-none bg-transparent cursor-pointer"
                                             >
@@ -89,7 +76,7 @@ export const BookingCard: React.FC<BookingCardProps> = ({
                     <span className="text-xl font-black text-accent-gold">{booking.totalPrice.toFixed(2)} ₴</span>
                 </div>
 
-                {!isPast && booking.tickets.length > 0 && (
+                {!isPast && booking.tickets && booking.tickets.length > 0 && (
                     <button onClick={() => onDownload(booking.id)} disabled={downloadingId !== null || cancellingTicketId !== null} className="bg-white/5 border border-white/10 hover:border-accent-gold text-white hover:text-dark-bg font-bold text-xs px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
                         <Download className="w-3.5 h-3.5" /> PDF квитки
                     </button>

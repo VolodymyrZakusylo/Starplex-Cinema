@@ -37,7 +37,9 @@ export const useAuthStore = create<AuthInterface>((set) => ({
     localStorage.setItem('token', authData.token);
     localStorage.setItem('refreshToken', authData.refreshToken);
     localStorage.setItem('userId', authData.userId);
+    localStorage.setItem('email', authData.email);
     localStorage.setItem('firstName', authData.firstName);
+    localStorage.setItem('lastName', authData.lastName);
     localStorage.setItem('roles', JSON.stringify(authData.roles));
     
     if (authData.cinemaId) {
@@ -69,7 +71,9 @@ export const useAuthStore = create<AuthInterface>((set) => ({
   checkAuth: () => {
     const token = localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
+    const email = localStorage.getItem('email');
     const firstName = localStorage.getItem('firstName');
+    const lastName = localStorage.getItem('lastName');
     const storedRoles = localStorage.getItem('roles');
     const cinemaId = localStorage.getItem('cinemaId');
 
@@ -80,9 +84,9 @@ export const useAuthStore = create<AuthInterface>((set) => ({
         user: {
           token,
           userId,
-          email: null,
-          firstName: firstName,
-          lastName: null,
+          email,
+          firstName,
+          lastName,
           roles: roles,
           cinemaId: cinemaId,
         },

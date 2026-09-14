@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User } from 'lucide-react';
-import api from '@/api/axios';
+import { usersApi } from '@/api/users';
 
 interface ProfileDataFormProps {
     initialFirstName: string;
@@ -18,18 +18,14 @@ export const ProfileDataForm: React.FC<ProfileDataFormProps> = ({ initialFirstNa
 
         setIsUpdating(true);
         try {
-            await api.put('/User/update-profile', { 
+            await usersApi.updateProfile({ 
                 firstName: firstName.trim(), 
                 lastName: lastName.trim() 
             });
             
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-                const parsed = JSON.parse(storedUser);
-                parsed.firstName = firstName.trim();
-                parsed.lastName = lastName.trim();
-                localStorage.setItem('user', JSON.stringify(parsed));
-            }
+            localStorage.setItem('firstName', firstName.trim());
+            localStorage.setItem('lastName', lastName.trim());
+
             alert('🎉 Особисті дані успішно оновлено!');
         } catch (err) {
             alert('Не вдалося оновити особисті дані.');

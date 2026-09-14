@@ -1,29 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Edit2, Film, Clock, Search, Download, Image, Calendar } from 'lucide-react';
-import api from '@/api/axios';
+import { moviesApi } from '@/api/movies';
+import type { MovieDto, TmdbSearchValue } from '@/types/movies';
 import { useToast } from '@/hooks/useToast';
 import { MovieFormModal } from './components/MovieFormModal';
-
-interface MovieDto {
-    id: string;
-    title: string;
-    description?: string;
-    durationInMinutes: number;
-    posterUrl: string;
-    effectivePosterUrl?: string;
-    backdropUrl?: string;
-    genre?: string;
-    trailerUrl?: string;
-    ageRating?: string;
-    status: number;
-}
-
-interface TmdbSearchValue {
-    id: number;
-    title: string;
-    releaseDate: string;
-    posterUrl?: string;
-}
 
 export const AdminMoviesPage: React.FC = () => {
     const { confirm, showError, showSuccess } = useToast();
@@ -40,8 +20,8 @@ export const AdminMoviesPage: React.FC = () => {
     const fetchMovies = async () => {
         setIsLoading(true);
         try {
-            const response = await api.get<MovieDto[]>('/Movies');
-            setMovies(response.data);
+            const data = await moviesApi.getAll();
+            setMovies(data);
         } catch (err: any) {
             showError(err.response?.data?.message || 'Не вдалося завантажити каталог фільмів.');
         } finally {
@@ -58,8 +38,8 @@ export const AdminMoviesPage: React.FC = () => {
         if (!tmdbQuery.trim()) return;
         setIsSearchingTmdb(true);
         try {
-            const response = await api.get<TmdbSearchValue[]>(`/Movies/search-tmdb?query=${encodeURIComponent(tmdbQuery)}`);
-            setTmdbResults(response.data);
+            const data = await moviesApi.searchTmdb(tmdbQuery);
+            setTmdbResults(data);
         } catch (err: any) {
             showError(err.response?.data?.message || 'Помилка пошуку в базі TMDB.');
         } finally {
@@ -69,7 +49,7 @@ export const AdminMoviesPage: React.FC = () => {
 
     const handleImportMovie = async (tmdbId: number) => {
         try {
-            await api.post(`/Movies/import-tmdb/${tmdbId}`, {});
+            await moviesApi.importTmdb(tmdbId);
             showSuccess('Фільм успішно імпортовано з медіабази TMDB!');
             setIsModalOpen(false);
             fetchMovies();
@@ -81,7 +61,7 @@ export const AdminMoviesPage: React.FC = () => {
     const handleDeleteMovie = (id: string) => {
         confirm('Ви впевнені, що хочете остаточно видалити цей фільм із каталогу мережі?', async () => {
             try {
-                await api.delete(`/Movies/${id}`);
+                await moviesApi.delete(id);
                 showSuccess('Фільм успішно видалено.');
                 fetchMovies();
             } catch (err: any) {

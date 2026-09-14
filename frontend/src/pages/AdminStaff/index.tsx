@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Shield, Search, SlidersHorizontal, Edit2, UserCheck, MapPin, ChevronLeft, ChevronRight, X, Check } from 'lucide-react';
-import api from '@/api/axios';
+import { usersApi } from '@/api/users';
+import { cinemasApi } from '@/api/cinemas';
+import type { UserStaffDto } from '@/types/admin';
+import type { CinemaDto } from '@/types/cinemas';
 import { useToast } from '@/hooks/useToast';
-import type { CinemaDto } from '@/types';
 
 export const UserRole = {
     SuperAdmin: 0,
@@ -19,21 +21,6 @@ const RoleLabels: Record<string, string> = {
     'Cashier': 'Касир',
     'Customer': 'Клієнт'
 };
-
-interface UserStaffDto {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    currentRole: string;
-    cinemaId: string | null;
-    cinemaName: string;
-}
-
-interface PagedResponse {
-    users: UserStaffDto[];
-    totalCount: number;
-}
 
 export const AdminStaffPage: React.FC = () => {
     const { showError, showSuccess } = useToast();
@@ -57,8 +44,8 @@ export const AdminStaffPage: React.FC = () => {
 
     const fetchCinemas = async () => {
         try {
-            const response = await api.get<CinemaDto[]>('/Cinemas');
-            setCinemas(response.data);
+            const data = await cinemasApi.getAll();
+            setCinemas(data);
         } catch (err) {
             showError('Не вдалося завантажити список кінотеатрів мережі.');
         }
@@ -75,9 +62,9 @@ export const AdminStaffPage: React.FC = () => {
             if (roleFilter) params.roleFilter = roleFilter;
             if (cinemaFilter) params.cinemaIdFilter = cinemaFilter;
 
-            const response = await api.get<PagedResponse>('/Users/staff', { params });
-            setUsers(response.data.users);
-            setTotalCount(response.data.totalCount);
+            const response = await usersApi.getStaff(params);
+            setUsers((response as any).users || response.items || []);
+            setTotalCount(response.totalCount);
         } catch (err: any) {
             showError(err.response?.data?.message || 'Не вдалося завантажити реєстр користувачів.');
         } finally {
@@ -102,7 +89,8 @@ export const AdminStaffPage: React.FC = () => {
     const handleOpenEditModal = (user: UserStaffDto) => {
         setSelectedUser(user);
         
-        const currentRoleEnum = (UserRole as any)[user.currentRole] ?? UserRole.Customer;
+        const currentRoleName = (user as any).currentRole || (user.roles && user.roles[0]);
+        const currentRoleEnum = (UserRole as any)[currentRoleName] ?? UserRole.Customer;
         setSelectedRole(currentRoleEnum as UserRoleType);
         setSelectedCinemaId(user.cinemaId || '');
         setModalError('');
@@ -121,10 +109,8 @@ export const AdminStaffPage: React.FC = () => {
         }
 
         try {
-            await api.put(`/Users/${selectedUser.id}/role`, {
-                newRole: selectedRole,
-                cinemaId: needCinema ? selectedCinemaId : null
-            });
+            const roleName = Object.keys(UserRole).find(key => (UserRole as any)[key] === selectedRole) || 'Customer';
+            await usersApi.updateRole(selectedUser.id, roleName, needCinema ? selectedCinemaId : null);
             showSuccess('Права та рівень доступу користувача успішно змінено.');
             setIsModalOpen(false);
             fetchUsers();
@@ -212,42 +198,45 @@ export const AdminStaffPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {users.map((user) => (
-                                    <tr key={user.id} className="hover:bg-white/[0.02] transition-colors">
-                                        <td className="p-4 sm:p-5 font-bold text-white whitespace-nowrap">
-                                            {user.lastName} {user.firstName}
-                                        </td>
-                                        <td className="p-4 sm:p-5 text-gray-400 font-mono">{user.email}</td>
-                                        <td className="p-4 sm:p-5 whitespace-nowrap">
-                                            {user.cinemaId ? (
-                                                <span className="flex items-center gap-1.5 text-gray-300 font-medium">
-                                                    <MapPin className="w-4 h-4 text-[#ffbd14]" /> {user.cinemaName}
+                                {users.map((user) => {
+                                    const currentRoleName = (user as any).currentRole || (user.roles && user.roles[0]) || 'Customer';
+                                    return (
+                                        <tr key={user.id} className="hover:bg-white/[0.02] transition-colors">
+                                            <td className="p-4 sm:p-5 font-bold text-white whitespace-nowrap">
+                                                {user.lastName} {user.firstName}
+                                            </td>
+                                            <td className="p-4 sm:p-5 text-gray-400 font-mono">{user.email}</td>
+                                            <td className="p-4 sm:p-5 whitespace-nowrap">
+                                                {user.cinemaId ? (
+                                                    <span className="flex items-center gap-1.5 text-gray-300 font-medium">
+                                                        <MapPin className="w-4 h-4 text-[#ffbd14]" /> {user.cinemaName || 'Кінотеатр'}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-500 italic">Глобальний доступ</span>
+                                                )}
+                                            </td>
+                                            <td className="p-4 sm:p-5">
+                                                <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                                                    currentRoleName === 'SuperAdmin' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                                    currentRoleName === 'CinemaManager' ? 'bg-[#ffbd14]/10 text-[#ffbd14] border-[#ffbd14]/20' :
+                                                    currentRoleName === 'Cashier' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                                    'bg-white/5 text-gray-400 border-white/5'
+                                                }`}>
+                                                    {RoleLabels[currentRoleName] || currentRoleName}
                                                 </span>
-                                            ) : (
-                                                <span className="text-gray-500 italic">Глобальний доступ</span>
-                                            )}
-                                        </td>
-                                        <td className="p-4 sm:p-5">
-                                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
-                                                user.currentRole === 'SuperAdmin' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                                                user.currentRole === 'CinemaManager' ? 'bg-[#ffbd14]/10 text-[#ffbd14] border-[#ffbd14]/20' :
-                                                user.currentRole === 'Cashier' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                                'bg-white/5 text-gray-400 border-white/5'
-                                            }`}>
-                                                {RoleLabels[user.currentRole] || user.currentRole}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 sm:p-5 text-right">
-                                            <button 
-                                                type="button"
-                                                onClick={() => handleOpenEditModal(user)}
-                                                className="p-2.5 bg-[#111219] hover:bg-[#ffbd14] rounded-xl text-gray-400 hover:text-black transition-all inline-flex items-center gap-2 border border-white/5 hover:border-transparent font-bold text-[11px] uppercase tracking-wider cursor-pointer"
-                                            >
-                                                <Edit2 className="w-3.5 h-3.5" /> Налаштувати
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="p-4 sm:p-5 text-right">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleOpenEditModal(user)}
+                                                    className="p-2.5 bg-[#111219] hover:bg-[#ffbd14] rounded-xl text-gray-400 hover:text-black transition-all inline-flex items-center gap-2 border border-white/5 hover:border-transparent font-bold text-[11px] uppercase tracking-wider cursor-pointer"
+                                                >
+                                                    <Edit2 className="w-3.5 h-3.5" /> Налаштувати
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
