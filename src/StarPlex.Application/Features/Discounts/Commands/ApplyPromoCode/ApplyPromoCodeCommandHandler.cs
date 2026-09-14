@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
+using StarPlex.Domain.Services;
 
 namespace StarPlex.Application.Features.Discounts.Commands.ApplyPromoCode;
 
@@ -39,8 +40,7 @@ public class ApplyPromoCodeCommandHandler : IRequestHandler<ApplyPromoCodeComman
         if (discount.UsageCount >= discount.UsageLimit)
             return new PromoCodeResultDto { IsSuccess = false, Message = "This promo code has reached its usage limit." };
 
-        decimal discountFactor = discount.Percentage / 100;
-        decimal discountAmount = Math.Round(booking.TotalPrice * discountFactor, 2);
+        decimal discountAmount = PricingCalculator.CalculateDiscountAmount(booking.TotalPrice, discount.Percentage);
         decimal newTotalPrice = booking.TotalPrice - discountAmount;
 
         booking.DiscountId = discount.Id;

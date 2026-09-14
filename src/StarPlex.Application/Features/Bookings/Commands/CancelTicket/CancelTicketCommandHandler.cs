@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Enums;
+using StarPlex.Domain.Services;
 
 namespace StarPlex.Application.Features.Bookings.Commands.CancelTicket;
 
@@ -41,23 +42,12 @@ public class CancelTicketCommandHandler : IRequestHandler<CancelTicketCommand, b
         if (DateTime.UtcNow >= booking.Session.StartTime.AddMinutes(-60)) return false;
         if (booking.Payment == null || string.IsNullOrEmpty(booking.Payment.StripePaymentIntentId)) return false;
 
-        decimal priceMultiplier = ticket.BookingSeat.Seat.Type switch
-        {
-            SeatType.VIP => 1.5m,
-            SeatType.Disabled => 0.8m,
-            _ => 1.0m
-        };
-        decimal baseTicketPrice = booking.Session.BasePrice * priceMultiplier;
+        decimal baseTicketPrice = PricingCalculator.CalculateTicketPrice(booking.Session.BasePrice, ticket.BookingSeat.Seat.Type);
 
         decimal refundAmount = baseTicketPrice;
         if (booking.DiscountId != null)
         {
-            decimal totalBasePrice = booking.BookingSeats.Sum(bs => bs.Seat.Type switch
-            {
-                SeatType.VIP => booking.Session.BasePrice * 1.5m,
-                SeatType.Disabled => booking.Session.BasePrice * 0.8m,
-                _ => booking.Session.BasePrice
-            });
+            decimal totalBasePrice = booking.BookingSeats.Sum(bs => PricingCalculator.CalculateTicketPrice(booking.Session.BasePrice, bs.Seat.Type));
 
             if (totalBasePrice > 0)
             {
