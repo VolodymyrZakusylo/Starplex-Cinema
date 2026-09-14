@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarPlex.Domain.UnitTests",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarPlex.Application.IntegrationTests", "tests\StarPlex.Application.IntegrationTests\StarPlex.Application.IntegrationTests.csproj", "{AD9EF6DC-F1FE-481C-9D97-FCE1E4A105E2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarPlex.API.IntegrationTests", "tests\StarPlex.API.IntegrationTests\StarPlex.API.IntegrationTests.csproj", "{58D2531F-7216-4C65-A68F-6B7106D71AA0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -50,9 +52,14 @@ Global
 		{AD9EF6DC-F1FE-481C-9D97-FCE1E4A105E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AD9EF6DC-F1FE-481C-9D97-FCE1E4A105E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AD9EF6DC-F1FE-481C-9D97-FCE1E4A105E2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{58D2531F-7216-4C65-A68F-6B7106D71AA0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{58D2531F-7216-4C65-A68F-6B7106D71AA0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{58D2531F-7216-4C65-A68F-6B7106D71AA0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{58D2531F-7216-4C65-A68F-6B7106D71AA0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{81856915-E692-4870-9574-594244F75AC7} = {42475DCE-EEB1-4EB7-9B09-EDA285B74877}
 		{AD9EF6DC-F1FE-481C-9D97-FCE1E4A105E2} = {42475DCE-EEB1-4EB7-9B09-EDA285B74877}
+		{58D2531F-7216-4C65-A68F-6B7106D71AA0} = {42475DCE-EEB1-4EB7-9B09-EDA285B74877}
 	EndGlobalSection
 EndGlobal
