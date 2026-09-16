@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { authApi } from '@/api/auth';
 
 interface UserState {
   token: string | null;
@@ -24,7 +25,7 @@ interface AuthInterface {
     roles: string[];
     cinemaId?: string | null;
   }) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   checkAuth: () => void;
 }
 
@@ -63,7 +64,17 @@ export const useAuthStore = create<AuthInterface>((set) => ({
     });
   },
 
-  logout: () => {
+  logout: async () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+
+    if (refreshToken) {
+      try {
+        await authApi.logout(refreshToken);
+      } catch (error) {
+        console.error('Failed to revoke token on backend during logout:', error);
+      }
+    }
+
     localStorage.clear();
     set({ user: null, isAuthenticated: false, isInitialized: true });
   },
