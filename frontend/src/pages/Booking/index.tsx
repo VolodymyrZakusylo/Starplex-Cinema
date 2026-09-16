@@ -149,7 +149,12 @@ export const BookingPage: React.FC = () => {
         };
     }, [sessionId]);
 
+    const pendingSeatIdsRef = useRef<Set<string>>(new Set());
+
     const handleSeatClick = async (seat: SeatMapDto) => {
+        if (pendingSeatIdsRef.current.has(seat.seatId)) return;
+        pendingSeatIdsRef.current.add(seat.seatId);
+
         const isSelected = selectedSeats.some((s) => s.seatId === seat.seatId);
         try {
             const isSuccess = isSelected 
@@ -166,7 +171,17 @@ export const BookingPage: React.FC = () => {
                 }
             }
         } catch (err: any) {
-            showError(err.response?.data?.Message || 'Місце вже заблоковане іншим користувачем.');
+            const status = err.response?.status;
+            const backendMessage = err.response?.data?.detail || err.response?.data?.message || err.response?.data?.Message;
+            if (status === 409) {
+                showError(backendMessage || 'Місце вже заблоковане іншим користувачем.');
+            } else if (backendMessage) {
+                showError(backendMessage);
+            } else {
+                showError(isSelected ? 'Не вдалося розблокувати місце.' : 'Не вдалося заблокувати місце.');
+            }
+        } finally {
+            pendingSeatIdsRef.current.delete(seat.seatId);
         }
     };
 
