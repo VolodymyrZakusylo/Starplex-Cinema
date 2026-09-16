@@ -99,6 +99,7 @@ export const MovieSchedule: React.FC<MovieScheduleProps> = ({ sessions, selected
                                 <Link
                                     key={session.id}
                                     to={`/booking/${session.id}`}
+                                    state={{ basePrice: session.basePrice }}
                                     className="flex flex-col items-center justify-center bg-[#111219] border border-white/5 hover:border-[#ffbd14] text-white hover:text-[#ffbd14] p-2.5 rounded-xl transition-all text-center group font-bold shadow-md"
                                 >
                                     <span className="text-[9px] uppercase text-gray-500 group-hover:text-[#ffbd14]/80 mb-1 truncate w-full">

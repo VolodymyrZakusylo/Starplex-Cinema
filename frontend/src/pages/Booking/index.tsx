@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { HubConnection, HubConnectionBuilder, LogLevel, HubConnectionState } from '@microsoft/signalr';
 import { useAuthStore } from '@/store/authStore';
 import { useToast } from '@/hooks/useToast';
 import { bookingsApi } from '@/api/bookings';
+import { sessionsApi } from '@/api/sessions';
 import { discountsApi } from '@/api/discounts';
 
 import { SeatGrid } from './components/SeatGrid';
@@ -11,25 +12,16 @@ import { OrderSidebar } from './components/OrderSidebar';
 
 import type { SeatMapDto, CashierSaleDto, SignalRSeatsLockedDto, SignalRSeatsReleasedDto } from '@/types/bookings';
 
-const getUserIdFromToken = (): string | null => {
-    const token = localStorage.getItem('token');
-    if (!token) return null;
-    try {
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(
-            window.atob(base64).split('').map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-        );
-        const payload = JSON.parse(jsonPayload);
-        return payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] || payload.sub || null;
-    } catch (e) {
-        return null;
-    }
-};
+interface BookingLocationState {
+    basePrice?: number;
+}
 
 export const BookingPage: React.FC = () => {
     const { sessionId } = useParams<{ sessionId: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
+    const locationState = location.state as BookingLocationState | null;
+
     const { user } = useAuthStore();
     const { showError, showSuccess } = useToast();
 
@@ -37,6 +29,9 @@ export const BookingPage: React.FC = () => {
 
     const [seats, setSeats] = useState<SeatMapDto[]>([]);
     const [selectedSeats, setSelectedSeats] = useState<SeatMapDto[]>([]);
+    const [basePrice, setBasePrice] = useState<number | null>(
+        locationState?.basePrice ?? null
+    );
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
@@ -54,8 +49,7 @@ export const BookingPage: React.FC = () => {
     const [isValidatingPromo, setIsValidatingPromo] = useState<boolean>(false);
 
     const connectionRef = useRef<HubConnection | null>(null);
-    const basePrice = 150;
-    const currentUserId = getUserIdFromToken();
+    const currentUserId = user?.userId || null;
 
     const fetchSeatMap = async () => {
         if (!sessionId) return;
@@ -69,6 +63,14 @@ export const BookingPage: React.FC = () => {
                     (s) => s.status === 'Locked' && s.lockedByUserId?.toLowerCase() === currentUserId.toLowerCase()
                 );
                 setSelectedSeats(myLockedSeats);
+            }
+
+            if (basePrice === null) {
+                const allSessions = await sessionsApi.getAll();
+                const currentSession = allSessions.find((s) => s.id === sessionId);
+                if (currentSession?.basePrice !== undefined && currentSession?.basePrice !== null) {
+                    setBasePrice(currentSession.basePrice);
+                }
             }
         } catch (err) {
             showError('Не вдалося синхронізувати схему залу.');
@@ -235,6 +237,23 @@ export const BookingPage: React.FC = () => {
         return (
             <div className="flex flex-col items-center justify-center py-40 text-white">
                 <div className="w-10 h-10 border-4 border-[#ffbd14] border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
+
+    if (basePrice === null) {
+        return (
+            <div className="w-full flex flex-col items-center justify-center py-32 text-white text-center">
+                <div className="bg-[#1a1c26] border border-white/10 p-8 rounded-3xl max-w-md w-full shadow-2xl flex flex-col items-center gap-4">
+                    <p className="text-sm font-bold text-gray-300">Не вдалося завантажити ціну сеансу.</p>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/')}
+                        className="px-6 py-3 bg-[#ffbd14] text-black font-black text-xs uppercase tracking-wider rounded-xl border-none cursor-pointer hover:bg-[#e0a410] transition-all"
+                    >
+                        Повернутися на головну
+                    </button>
+                </div>
             </div>
         );
     }
