@@ -1,6 +1,7 @@
 using StarPlex.Application.Common.Exceptions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using StarPlex.Application.Common.Helpers;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Enums;
 
@@ -35,13 +36,29 @@ public class MoveSessionCommandHandler : IRequestHandler<MoveSessionCommand, boo
         var adjustedStartTime = rem == 0 ? rawTime : rawTime.AddMinutes(5 - rem).AddSeconds(-rawTime.Second).AddMilliseconds(-rawTime.Millisecond);
         adjustedStartTime = DateTime.SpecifyKind(adjustedStartTime, DateTimeKind.Utc);
 
+        var hasBookings = await _context.Bookings
+            .AnyAsync(b => b.SessionId == request.SessionId && b.Status == BookingStatus.Confirmed, cancellationToken);
+
+        if (hasBookings && (session.StartTime != adjustedStartTime || session.HallId != request.HallId))
+        {
+            throw new BusinessRuleException("Cannot move session because there are active bookings for this session.");
+        }
+
         var adjustedEndTime = adjustedStartTime.AddMinutes(session.MovieDurationInMinutes + CleanUpDurationInMinutes);
 
-        var startOfWorkingDay = new DateTime(adjustedStartTime.Year, adjustedStartTime.Month, adjustedStartTime.Day, 10, 0, 0, DateTimeKind.Utc);
-        var endOfWorkingDay = new DateTime(adjustedStartTime.Year, adjustedStartTime.Month, adjustedStartTime.Day, 23, 0, 0, DateTimeKind.Utc);
+        var kyivTzi = TimeZoneHelpers.KyivTimeZone;
+        var startTimeKyiv = TimeZoneInfo.ConvertTimeFromUtc(adjustedStartTime, kyivTzi);
+        var occupiedEndTimeKyiv = TimeZoneInfo.ConvertTimeFromUtc(adjustedEndTime, kyivTzi);
 
-        if (adjustedStartTime < startOfWorkingDay || adjustedEndTime > endOfWorkingDay)
-            throw new BusinessRuleException("The rescheduled session falls outside the cinema's working hours (10:00 - 23:00).");
+        var startOfWorkingDayKyiv = new DateTime(startTimeKyiv.Year, startTimeKyiv.Month, startTimeKyiv.Day, 10, 0, 0);
+        var endOfWorkingDayKyiv = new DateTime(startTimeKyiv.Year, startTimeKyiv.Month, startTimeKyiv.Day, 23, 0, 0);
+
+        if (startTimeKyiv.Date != occupiedEndTimeKyiv.Date ||
+            startTimeKyiv < startOfWorkingDayKyiv ||
+            occupiedEndTimeKyiv > endOfWorkingDayKyiv)
+        {
+            throw new BusinessRuleException("The rescheduled session falls outside the cinema's working hours (10:00 - 23:00 Kyiv time).");
+        }
 
         var hasCollision = await _context.Sessions
             .AnyAsync(s => s.Id != session.Id &&
@@ -57,7 +74,7 @@ public class MoveSessionCommandHandler : IRequestHandler<MoveSessionCommand, boo
         session.HallId = request.HallId;
         session.StartTime = adjustedStartTime;
 
-        session.BasePrice = adjustedStartTime.Hour switch
+        session.BasePrice = startTimeKyiv.Hour switch
         {
             >= 10 and < 12 => Math.Round(session.OriginalPrice * 0.80m, 0),
             >= 12 and < 17 => session.OriginalPrice,

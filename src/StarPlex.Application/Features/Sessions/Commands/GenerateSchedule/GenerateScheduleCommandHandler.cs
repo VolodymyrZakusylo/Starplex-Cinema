@@ -1,6 +1,7 @@
 using StarPlex.Application.Common.Exceptions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using StarPlex.Application.Common.Helpers;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
 using StarPlex.Domain.Enums;
@@ -19,21 +20,41 @@ public class GenerateScheduleCommandHandler : IRequestHandler<GenerateScheduleCo
 
     public async Task<int> Handle(GenerateScheduleCommand request, CancellationToken cancellationToken)
     {
+        var kyivTzi = TimeZoneHelpers.KyivTimeZone;
+        var nowKyiv = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, kyivTzi);
+        var todayKyivDate = nowKyiv.Date;
+        var requestedKyivDate = new DateTime(request.TargetDate.Year, request.TargetDate.Month, request.TargetDate.Day);
+
+        if (requestedKyivDate < todayKyivDate)
+            throw new BusinessRuleException("Cannot generate a schedule for a past date.");
+
         var halls = await _context.Halls
             .Where(h => h.CinemaId == request.CinemaId && h.IsActive)
+            .OrderBy(h => h.Name)
+            .ThenBy(h => h.Id)
             .ToListAsync(cancellationToken);
 
         if (!halls.Any())
             throw new BusinessRuleException("There are no active halls in this cinema to generate a schedule.");
 
+        var startOfKyivCalendarDay = new DateTime(request.TargetDate.Year, request.TargetDate.Month, request.TargetDate.Day, 0, 0, 0, DateTimeKind.Unspecified);
+        var endOfKyivCalendarDay = startOfKyivCalendarDay.AddDays(1);
+
+        var startOfCalendarDayUtc = TimeZoneInfo.ConvertTimeToUtc(startOfKyivCalendarDay, kyivTzi);
+        var endOfCalendarDayUtc = TimeZoneInfo.ConvertTimeToUtc(endOfKyivCalendarDay, kyivTzi);
+
         var existingSessionsOnDate = await _context.Sessions
             .Where(s => s.Status == SessionStatus.Active &&
-                        s.StartTime.Date == request.TargetDate.Date &&
+                        s.StartTime >= startOfCalendarDayUtc &&
+                        s.StartTime < endOfCalendarDayUtc &&
                         halls.Select(h => h.Id).Contains(s.HallId))
             .ToListAsync(cancellationToken);
 
         if (existingSessionsOnDate.Any())
             throw new ConflictException($"Schedule for {request.TargetDate:dd.MM.yyyy} already exists ({existingSessionsOnDate.Count} sessions found). Please clear it first.");
+
+        var startOfKyivDay = new DateTime(request.TargetDate.Year, request.TargetDate.Month, request.TargetDate.Day, 10, 0, 0, DateTimeKind.Unspecified);
+        var endOfKyivDay = new DateTime(request.TargetDate.Year, request.TargetDate.Month, request.TargetDate.Day, 23, 0, 0, DateTimeKind.Unspecified);
 
         var movies = await _context.Movies
             .Where(m => request.MovieIds.Contains(m.Id) && m.Status == MovieStatus.NowShowing)
@@ -45,37 +66,38 @@ public class GenerateScheduleCommandHandler : IRequestHandler<GenerateScheduleCo
 
         int sessionsCreated = 0;
 
-        foreach (var hall in halls)
+        for (int hallIndex = 0; hallIndex < halls.Count; hallIndex++)
         {
-            int movieIndex = 0;
+            var hall = halls[hallIndex];
+            int movieIndex = hallIndex;
 
-            var startOfDay = new DateTime(request.TargetDate.Year, request.TargetDate.Month, request.TargetDate.Day, 10, 0, 0, DateTimeKind.Utc);
-            var endOfDay = new DateTime(request.TargetDate.Year, request.TargetDate.Month, request.TargetDate.Day, 23, 0, 0, DateTimeKind.Utc);
+            var currentKyivTrackTime = startOfKyivDay;
 
-            var currentTrackTime = startOfDay;
-
-            while (currentTrackTime < endOfDay)
+            while (currentKyivTrackTime < endOfKyivDay)
             {
                 var currentMovie = movies[movieIndex % movies.Count];
 
-                var sessionStartTime = currentTrackTime;
-                var sessionEndTime = sessionStartTime.AddMinutes(currentMovie.DurationInMinutes);
+                var sessionStartTimeKyiv = currentKyivTrackTime;
+                var sessionEndTimeKyiv = sessionStartTimeKyiv.AddMinutes(currentMovie.DurationInMinutes);
 
-                if (sessionEndTime > endOfDay)
+                if (sessionEndTimeKyiv > endOfKyivDay)
                 {
                     break;
                 }
 
+                var sessionStartTimeUtc = TimeZoneInfo.ConvertTimeToUtc(sessionStartTimeKyiv, kyivTzi);
+                var sessionEndTimeUtc = TimeZoneInfo.ConvertTimeToUtc(sessionEndTimeKyiv, kyivTzi);
+
                 bool hasCollision = await _context.Sessions.AnyAsync(s =>
                     s.HallId == hall.Id &&
                     s.Status == SessionStatus.Active &&
-                    ((sessionStartTime >= s.StartTime && sessionStartTime < s.StartTime.AddMinutes(s.MovieDurationInMinutes + CleanUpDurationInMinutes)) ||
-                     (sessionEndTime > s.StartTime && sessionEndTime <= s.StartTime.AddMinutes(s.MovieDurationInMinutes + CleanUpDurationInMinutes))),
+                    ((sessionStartTimeUtc >= s.StartTime && sessionStartTimeUtc < s.StartTime.AddMinutes(s.MovieDurationInMinutes + CleanUpDurationInMinutes)) ||
+                     (sessionEndTimeUtc > s.StartTime && sessionEndTimeUtc <= s.StartTime.AddMinutes(s.MovieDurationInMinutes + CleanUpDurationInMinutes))),
                     cancellationToken);
 
                 if (!hasCollision)
                 {
-                    decimal calculatedPrice = sessionStartTime.Hour switch
+                    decimal calculatedPrice = sessionStartTimeKyiv.Hour switch
                     {
                         >= 10 and < 12 => request.BasePrice * 0.80m,
                         >= 12 and < 17 => request.BasePrice,
@@ -88,7 +110,7 @@ public class GenerateScheduleCommandHandler : IRequestHandler<GenerateScheduleCo
                         Id = Guid.NewGuid(),
                         MovieId = currentMovie.Id,
                         HallId = hall.Id,
-                        StartTime = sessionStartTime,
+                        StartTime = sessionStartTimeUtc,
                         MovieDurationInMinutes = currentMovie.DurationInMinutes,
                         OriginalPrice = request.BasePrice,
                         BasePrice = Math.Round(calculatedPrice, 0),
@@ -99,12 +121,12 @@ public class GenerateScheduleCommandHandler : IRequestHandler<GenerateScheduleCo
                     sessionsCreated++;
                 }
 
-                var nextTimeWithCleanUp = sessionEndTime.AddMinutes(CleanUpDurationInMinutes);
-                int minutesToSubtractOrAdd = nextTimeWithCleanUp.Minute % 5;
+                var nextTimeWithCleanUpKyiv = sessionEndTimeKyiv.AddMinutes(CleanUpDurationInMinutes);
+                int minutesToSubtractOrAdd = nextTimeWithCleanUpKyiv.Minute % 5;
 
-                currentTrackTime = minutesToSubtractOrAdd == 0
-                    ? nextTimeWithCleanUp
-                    : nextTimeWithCleanUp.AddMinutes(5 - minutesToSubtractOrAdd);
+                currentKyivTrackTime = minutesToSubtractOrAdd == 0
+                    ? nextTimeWithCleanUpKyiv
+                    : nextTimeWithCleanUpKyiv.AddMinutes(5 - minutesToSubtractOrAdd);
 
                 movieIndex++;
             }

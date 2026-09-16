@@ -2,6 +2,11 @@ import api from './axios';
 import type { SessionDto } from '@/types/sessions';
 
 export const sessionsApi = {
+  getAll: async (): Promise<SessionDto[]> => {
+    const response = await api.get<SessionDto[]>('/Sessions');
+    return response.data;
+  },
+
   getByCinema: async (cinemaId: string): Promise<SessionDto[]> => {
     const response = await api.get<SessionDto[]>(`/Sessions/cinema/${cinemaId}`);
     return response.data;

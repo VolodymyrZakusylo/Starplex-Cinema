@@ -3,6 +3,7 @@ import { Calendar, DollarSign, Film, Sliders, AlertTriangle } from 'lucide-react
 import { moviesApi } from '@/api/movies';
 import { sessionsApi } from '@/api/sessions';
 import { useToast } from '@/hooks/useToast';
+import { getKyivDateString } from '@/utils/date';
 import type { CinemaDto } from '@/types/cinemas';
 import type { MovieShortDto } from '@/types/movies';
 
@@ -22,9 +23,7 @@ export const ScheduleGenerationPanel: React.FC<ScheduleGenerationPanelProps> = (
     const { showError, showSuccess, confirm } = useToast();
     const [movies, setMovies] = useState<MovieShortDto[]>([]);
     const [selectedCinemaId, setSelectedCinemaId] = useState<string>(currentCinemaId);
-    const [targetDate, setTargetDate] = useState<string>(
-        new Date(Date.now() + 86400000).toISOString().split('T')[0]
-    );
+    const [targetDate, setTargetDate] = useState<string>(() => getKyivDateString(1));
     const [basePrice, setBasePrice] = useState<number>(150);
     const [selectedMovieIds, setSelectedMovieIds] = useState<string[]>([]);
 
@@ -60,7 +59,8 @@ export const ScheduleGenerationPanel: React.FC<ScheduleGenerationPanelProps> = (
     const handleGenerate = (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (new Date(targetDate) < new Date(new Date().toDateString())) {
+        const todayStr = getKyivDateString(0);
+        if (targetDate < todayStr) {
             setStatusMessage({ type: 'error', text: 'Критична помилка: Заборонено генерувати розклад сеансів на минулу дату.' });
             return;
         }
@@ -77,7 +77,7 @@ export const ScheduleGenerationPanel: React.FC<ScheduleGenerationPanelProps> = (
             try {
                 const data = await sessionsApi.generateSchedule({
                     cinemaId: selectedCinemaId,
-                    targetDate: new Date(targetDate).toISOString(),
+                    targetDate: `${targetDate}T00:00:00.000Z`,
                     basePrice: basePrice,
                     movieIds: selectedMovieIds
                 });

@@ -19,7 +19,7 @@ export const bookingsApi = {
   },
 
   lockSeat: async (sessionId: string, seatId: string): Promise<boolean> => {
-    const response = await api.post<{ isSuccess: boolean }>('/Bookings/lock-seat', {
+    const response = await api.post<{ isSuccess: boolean }>('/Bookings/lock', {
       sessionId,
       seatIds: [seatId],
     });
@@ -27,7 +27,7 @@ export const bookingsApi = {
   },
 
   unlockSeat: async (sessionId: string, seatId: string): Promise<boolean> => {
-    const response = await api.post<{ isSuccess: boolean }>('/Bookings/unlock-seat', {
+    const response = await api.post<{ isSuccess: boolean }>('/Bookings/unlock', {
       sessionId,
       seatIds: [seatId],
     });

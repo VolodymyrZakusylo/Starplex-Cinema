@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { CheckCircle2, XCircle, ShieldCheck, ScanLine, Film, MapPin, Armchair, ArrowRight } from 'lucide-react';
 import { bookingsApi } from '@/api/bookings';
@@ -8,9 +8,35 @@ export const CashierScannerPage: React.FC = () => {
     const [scanResult, setScanResult] = useState<ScanResultDto | null>(null);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
+    const isProcessingRef = useRef<boolean>(false);
+    const scanResultRef = useRef<ScanResultDto | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
+
     useEffect(() => {
+        isProcessingRef.current = isProcessing;
+    }, [isProcessing]);
+
+    useEffect(() => {
+        scanResultRef.current = scanResult;
+    }, [scanResult]);
+
+    const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+
+    useEffect(() => {
+        let isCancelled = false;
+        let isCleanedUp = false;
+
+        const parentContainer = containerRef.current;
+        if (!parentContainer) return;
+
+        const hostId = `ticket-scanner-viewport-${Math.random().toString(36).substring(2, 9)}`;
+        const hostEl = document.createElement('div');
+        hostEl.id = hostId;
+        hostEl.className = 'w-full rounded-2xl overflow-hidden bg-black';
+        parentContainer.appendChild(hostEl);
+
         const scanner = new Html5QrcodeScanner(
-            "ticket-scanner-viewport",
+            hostId,
             { 
                 fps: 15, 
                 qrbox: { width: 250, height: 250 },
@@ -18,41 +44,68 @@ export const CashierScannerPage: React.FC = () => {
             },
             false
         );
+        scannerRef.current = scanner;
 
         const onScanSuccess = async (decodedText: string) => {
-            if (isProcessing || scanResult) return;
+            if (isCancelled || isProcessingRef.current || scanResultRef.current) return;
             
+            isProcessingRef.current = true;
             setIsProcessing(true);
             try {
                 const data = await bookingsApi.scanTicket(decodedText.trim());
-                setScanResult(data);
+                if (!isCancelled) {
+                    scanResultRef.current = data;
+                    setScanResult(data);
+                }
             } catch (err: any) {
-                setScanResult({
-                    isSuccess: false,
-                    message: err.response?.data?.message || "Помилка сервера або недійсний код квитка."
-                });
+                if (!isCancelled) {
+                    const errResult: ScanResultDto = {
+                        isSuccess: false,
+                        message: err.response?.data?.message || "Помилка сервера або недійсний код квитка."
+                    };
+                    scanResultRef.current = errResult;
+                    setScanResult(errResult);
+                }
             } finally {
+                isProcessingRef.current = false;
                 setIsProcessing(false);
             }
         };
 
-        const onScanFailure = () => {
-        };
+        const onScanFailure = () => {};
 
         scanner.render(onScanSuccess, onScanFailure);
 
         return () => {
-            scanner.clear().catch(err => console.error("Помилка зупинки камери сканера:", err));
+            if (isCleanedUp) return;
+            isCleanedUp = true;
+            isCancelled = true;
+
+            if (scannerRef.current === scanner) {
+                scannerRef.current = null;
+            }
+
+            const cleanUpHost = () => {
+                if (hostEl.parentNode) {
+                    hostEl.parentNode.removeChild(hostEl);
+                }
+            };
+
+            scanner.clear()
+                .catch(() => {})
+                .finally(() => {
+                    cleanUpHost();
+                });
         };
-    }, [isProcessing, scanResult]);
+    }, []);
 
     const handleClearAndNext = () => {
+        scanResultRef.current = null;
         setScanResult(null);
     };
 
     return (
         <div className="w-full flex flex-col items-center justify-start gap-6 select-none">
-            
             <div className="w-full max-w-md text-center border-b border-white/5 pb-4">
                 <h1 className="text-2xl font-black tracking-tight flex items-center justify-center gap-2">
                     <ShieldCheck className="text-[#ffbd14] w-7 h-7" /> Контроль доступу
@@ -61,7 +114,7 @@ export const CashierScannerPage: React.FC = () => {
             </div>
 
             <div className="w-full max-w-md bg-[#1a1c26] border border-white/5 p-4 rounded-3xl shadow-2xl relative overflow-hidden">
-                <div id="ticket-scanner-viewport" className="w-full rounded-2xl overflow-hidden bg-black"></div>
+                <div ref={containerRef} className="w-full"></div>
                 
                 {isProcessing && (
                     <div className="absolute inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center flex-col gap-2 rounded-3xl">
@@ -81,7 +134,6 @@ export const CashierScannerPage: React.FC = () => {
                 <div className={`w-full max-w-md p-5 rounded-2xl border flex flex-col gap-4 shadow-xl animate-fadeIn ${
                     scanResult.isSuccess ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'
                 }`}>
-                    
                     <div className="flex items-start gap-3.5">
                         {scanResult.isSuccess ? (
                             <CheckCircle2 className="w-9 h-9 text-emerald-400 shrink-0 mt-0.5" />

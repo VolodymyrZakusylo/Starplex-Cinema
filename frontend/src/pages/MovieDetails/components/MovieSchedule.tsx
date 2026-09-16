@@ -22,8 +22,8 @@ export const MovieSchedule: React.FC<MovieScheduleProps> = ({ sessions, selected
 
     allowedSessions.forEach((session) => {
         const dateObj = new Date(session.startTime);
-        const tabLabel = dateObj.toLocaleDateString('uk-UA', { weekday: 'short', day: 'numeric', month: 'short' });
-        const fullLabel = dateObj.toLocaleDateString('uk-UA', { weekday: 'long', day: 'numeric', month: 'long' });
+        const tabLabel = dateObj.toLocaleDateString('uk-UA', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Kyiv' });
+        const fullLabel = dateObj.toLocaleDateString('uk-UA', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Kyiv' });
         const formattedFullLabel = fullLabel.charAt(0).toUpperCase() + fullLabel.slice(1);
 
         if (!groupedByDate[formattedFullLabel]) {
@@ -93,12 +93,13 @@ export const MovieSchedule: React.FC<MovieScheduleProps> = ({ sessions, selected
                     <div className="grid grid-cols-3 gap-3">
                         {activeSessionsSorted.map((session) => {
                             const sessionTime = new Date(session.startTime).toLocaleTimeString('uk-UA', {
-                                hour: '2-digit', minute: '2-digit', timeZone: 'UTC'
+                                hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv'
                             });
                             return (
                                 <Link
                                     key={session.id}
                                     to={`/booking/${session.id}`}
+                                    state={{ basePrice: session.basePrice }}
                                     className="flex flex-col items-center justify-center bg-[#111219] border border-white/5 hover:border-[#ffbd14] text-white hover:text-[#ffbd14] p-2.5 rounded-xl transition-all text-center group font-bold shadow-md"
                                 >
                                     <span className="text-[9px] uppercase text-gray-500 group-hover:text-[#ffbd14]/80 mb-1 truncate w-full">
