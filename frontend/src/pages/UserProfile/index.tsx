@@ -4,6 +4,8 @@ import { Ticket, ShieldAlert, User, UserMinus } from 'lucide-react';
 import { bookingsApi } from '@/api/bookings';
 import { usersApi } from '@/api/users';
 import type { UserBookingDto } from '@/types/bookings';
+import { useToast } from '@/hooks/useToast';
+import { useAuthStore } from '@/store/authStore';
 
 import { ProfileDataForm } from './components/ProfileDataForm';
 import { ChangePasswordForm } from './components/ChangePasswordForm';
@@ -11,6 +13,8 @@ import { BookingCard } from './components/BookingCard';
 
 export const UserProfilePage: React.FC = () => {
     const navigate = useNavigate();
+    const logout = useAuthStore((state) => state.logout);
+    const { confirm, showError, showSuccess } = useToast();
     const [bookings, setBookings] = useState<UserBookingDto[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'tickets' | 'settings'>('tickets');
@@ -40,21 +44,19 @@ export const UserProfilePage: React.FC = () => {
         fetchMyBookings();
     }, []);
 
-    const handleDeleteAccount = async () => {
-        const firstConfirm = window.confirm('⚠️ УВАГА! Ви дійсно хочете видалити аккаунт? Цю дію неможливо скасувати.');
-        if (!firstConfirm) return;
-
-        const secondConfirm = window.prompt('Введіть "ВИДАЛИТИ" для підтвердження:');
-        if (secondConfirm !== 'ВИДАЛИТИ') return;
-
-        try {
-            await usersApi.deleteAccount();
-            alert('Аккаунт успішно видалено.');
-            localStorage.clear();
-            navigate('/', { replace: true });
-        } catch (err) {
-            alert('Не вдалося видалити аккаунт.');
-        }
+    const handleDeleteAccount = () => {
+        confirm('Ви дійсно хочете видалити обліковий запис? Цю дію неможливо скасувати.', () => {
+            confirm('Остаточне підтвердження: видалити обліковий запис без можливості відновлення?', async () => {
+                try {
+                    await usersApi.deleteAccount();
+                    showSuccess('Обліковий запис успішно видалено.');
+                    await logout();
+                    navigate('/', { replace: true });
+                } catch (err) {
+                    showError('Не вдалося видалити обліковий запис.');
+                }
+            });
+        });
     };
 
     const handleDownloadAll = async (bookingId: string) => {
@@ -71,24 +73,25 @@ export const UserProfilePage: React.FC = () => {
             link.parentNode?.removeChild(link);
             window.URL.revokeObjectURL(downloadUrl);
         } catch (err) {
-            alert('Не вдалося завантажити квитки.');
+            showError('Не вдалося завантажити квитки.');
         } finally {
             setDownloadingId(null);
         }
     };
 
-    const handleCancelTicket = async (ticketId: string) => {
-        if (!window.confirm('Ви впевнені, що хочете повернути цей квиток?')) return;
-        setCancellingTicketId(ticketId);
-        try {
-            await bookingsApi.cancelTicket(ticketId);
-            alert('Квиток скасовано, кошти повернено!');
-            await fetchMyBookings();
-        } catch (err: any) {
-            alert(err.response?.data?.message || 'Не вдалося скасувати квиток.');
-        } finally {
-            setCancellingTicketId(null);
-        }
+    const handleCancelTicket = (ticketId: string) => {
+        confirm('Ви впевнені, що хочете повернути цей квиток?', async () => {
+            setCancellingTicketId(ticketId);
+            try {
+                await bookingsApi.cancelTicket(ticketId);
+                showSuccess('Квиток скасовано, кошти повернено!');
+                await fetchMyBookings();
+            } catch (err: any) {
+                showError(err.response?.data?.message || 'Не вдалося скасувати квиток.');
+            } finally {
+                setCancellingTicketId(null);
+            }
+        });
     };
 
     if (isLoading) {
@@ -128,10 +131,10 @@ export const UserProfilePage: React.FC = () => {
                 {activeTab === 'tickets' ? (
                     <div className="flex flex-col gap-10">
                         <div>
-                            <h2 className="text-lg font-black tracking-tight text-accent-gold mb-4 uppercase tracking-wider">🍿 Найближчі перегляди ({upcomingBookings.length})</h2>
+                            <h2 className="text-lg font-black tracking-tight text-accent-gold mb-4 uppercase tracking-wider">Найближчі перегляди ({upcomingBookings.length})</h2>
                             {upcomingBookings.length === 0 ? (
                                 <div className="bg-dark-secondary border border-white/5 rounded-2xl p-8 text-center text-text-muted text-xs">
-                                    У вас немає активних квитків. <Link to="/" className="text-accent-gold hover:underline font-bold mt-2 inline-block">Придбати квитки 🎟️</Link>
+                                    У вас немає активних квитків. <Link to="/" className="text-accent-gold hover:underline font-bold mt-2 inline-block">Придбати квитки</Link>
                                 </div>
                             ) : (
                                 <div className="space-y-4">
@@ -143,7 +146,7 @@ export const UserProfilePage: React.FC = () => {
                         </div>
 
                         <div>
-                            <h2 className="text-md font-bold text-text-muted mb-4 uppercase tracking-wider">🎬 Архів замовлень або скасовані квитки</h2>
+                            <h2 className="text-md font-bold text-text-muted mb-4 uppercase tracking-wider">Архів замовлень або скасовані квитки</h2>
                             {pastBookings.length === 0 ? (
                                 <div className="text-text-muted text-xs italic pl-2">Історія архіву порожня.</div>
                             ) : (

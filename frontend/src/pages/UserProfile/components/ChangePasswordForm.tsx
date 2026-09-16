@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { usersApi } from '@/api/users';
+import { useToast } from '@/hooks/useToast';
 
 export const ChangePasswordForm: React.FC = () => {
+    const { showError, showSuccess } = useToast();
     const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [isUpdating, setIsUpdating] = useState(false);
@@ -14,11 +16,11 @@ export const ChangePasswordForm: React.FC = () => {
         setIsUpdating(true);
         try {
             await usersApi.changePassword({ oldPassword, newPassword });
-            alert('🔑 Пароль успішно змінено!');
+            showSuccess('Пароль успішно змінено!');
             setOldPassword('');
             setNewPassword('');
         } catch (err: any) {
-            alert(err.response?.data?.message || err.response?.data?.Message || 'Помилка зміни пароля.');
+            showError(err.response?.data?.message || err.response?.data?.Message || 'Помилка зміни пароля.');
         } finally {
             setIsUpdating(false);
         }

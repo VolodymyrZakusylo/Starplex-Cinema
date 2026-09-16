@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User } from 'lucide-react';
 import { usersApi } from '@/api/users';
+import { useToast } from '@/hooks/useToast';
 
 interface ProfileDataFormProps {
     initialFirstName: string;
@@ -8,6 +9,7 @@ interface ProfileDataFormProps {
 }
 
 export const ProfileDataForm: React.FC<ProfileDataFormProps> = ({ initialFirstName, initialLastName }) => {
+    const { showError, showSuccess } = useToast();
     const [firstName, setFirstName] = useState(initialFirstName);
     const [lastName, setLastName] = useState(initialLastName);
     const [isUpdating, setIsUpdating] = useState(false);
@@ -26,9 +28,9 @@ export const ProfileDataForm: React.FC<ProfileDataFormProps> = ({ initialFirstNa
             localStorage.setItem('firstName', firstName.trim());
             localStorage.setItem('lastName', lastName.trim());
 
-            alert('🎉 Особисті дані успішно оновлено!');
+            showSuccess('Особисті дані успішно оновлено!');
         } catch (err) {
-            alert('Не вдалося оновити особисті дані.');
+            showError('Не вдалося оновити особисті дані.');
         } finally {
             setIsUpdating(false);
         }
