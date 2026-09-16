@@ -1,21 +1,19 @@
-import React, { useRef, useState } from 'react';
-import { Clock, Award, Trash2, Edit2 } from 'lucide-react';
-import { sessionsApi } from '@/api/sessions';
-import { useToast } from '@/hooks/useToast';
+import React, { useRef } from 'react';
+import { Clock, Award, Plus, Edit2, Trash2 } from 'lucide-react';
 import type { SessionDto, HallDto } from '@/types';
 
 interface InteractiveTimelineProps {
     halls: HallDto[];
     filteredSessions: SessionDto[];
     selectedDate: string;
-    onScheduleUpdated: () => void;
-    onDeleteSession: (id: string) => void;
     onEditSession: (session: SessionDto) => void;
+    onDeleteSession: (id: string) => void;
+    onCreateSessionForSlot: (hallId: string, timeString: string) => void;
 }
 
 const START_HOUR = 10;
 const END_HOUR = 23;
-const HOUR_WIDTH = 120;
+const HOUR_WIDTH = 110;
 const MINUTE_WIDTH = HOUR_WIDTH / 60;
 const CLEAN_UP_DURATION = 20;
 
@@ -23,15 +21,14 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
     halls,
     filteredSessions,
     selectedDate,
-    onScheduleUpdated,
+    onEditSession,
     onDeleteSession,
-    onEditSession
+    onCreateSessionForSlot
 }) => {
-    const { showError } = useToast();
-    const timelinesRef = useRef<Record<string, HTMLDivElement | null>>({});
-    const [isDraggingOverTrash, setIsDraggingOverTrash] = useState(false);
+    const tracksRef = useRef<Record<string, HTMLDivElement | null>>({});
 
     const getMinutesFromStart = (isoString: string) => {
+        if (!isoString) return 0;
         const date = new Date(isoString);
         const formatter = new Intl.DateTimeFormat('en-US', {
             timeZone: 'Europe/Kyiv',
@@ -46,77 +43,64 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
         return Math.max(0, (hour * 60 + minute) - START_HOUR * 60);
     };
 
-    const calculatePixelPosition = (startTime: string, movieDuration: number) => {
-        const startMinutes = getMinutesFromStart(startTime);
-        const totalDuration = movieDuration + CLEAN_UP_DURATION;
-
-        const left = startMinutes * MINUTE_WIDTH;
-        const width = totalDuration * MINUTE_WIDTH;
-
-        return { left: `${left}px`, width: `${width}px` };
+    const formatKyivTime = (isoString: string) => {
+        if (!isoString) return '00:00';
+        return new Date(isoString).toLocaleTimeString('uk-UA', {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'Europe/Kyiv'
+        });
     };
 
-    const handleDragStart = (e: React.DragEvent, sessionId: string) => {
-        e.dataTransfer.setData('text/plain', sessionId);
-    };
+    const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>, hallId: string) => {
+        if ((e.target as HTMLElement).closest('.session-block')) return;
 
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-    };
+        const trackEl = tracksRef.current[hallId];
+        if (!trackEl) return;
 
-    const handleDrop = async (e: React.DragEvent, targetHallId: string) => {
-        e.preventDefault();
-        const sessionId = e.dataTransfer.getData('text/plain');
-        const timelineTrack = timelinesRef.current[targetHallId];
+        const rect = trackEl.getBoundingClientRect();
+        const offsetX = e.clientX - rect.left;
+        const clickedMinutesFromStart = Math.max(0, Math.round(offsetX / MINUTE_WIDTH));
+        const snappedMinutesFromStart = Math.round(clickedMinutesFromStart / 5) * 5;
+        const rawTotalMinutes = START_HOUR * 60 + snappedMinutesFromStart;
+        const maxTotalMinutes = END_HOUR * 60 - 5; // 22:55 is the last valid start slot inside 10:00-23:00
+        const minTotalMinutes = START_HOUR * 60;
 
-        if (!timelineTrack || !sessionId) return;
+        const totalMinutes = Math.max(minTotalMinutes, Math.min(maxTotalMinutes, rawTotalMinutes));
+        const hour = Math.floor(totalMinutes / 60);
+        const minute = totalMinutes % 60;
 
-        const rect = timelineTrack.getBoundingClientRect();
-        const scrollLeft = timelineTrack.closest('.overflow-x-auto')?.scrollLeft || 0;
-        const offsetX = e.clientX - rect.left + scrollLeft;
-
-        const droppedMinutes = Math.round(offsetX / MINUTE_WIDTH);
-        const targetTotalMinutes = START_HOUR * 60 + droppedMinutes;
-        const roundedMinutes = Math.round(targetTotalMinutes / 5) * 5;
-
-        const hours = Math.floor(roundedMinutes / 60);
-        const minutes = roundedMinutes % 60;
-
-        if (hours < START_HOUR || hours >= END_HOUR) {
-            showError('Помилка переміщення: Сеанс виходить за межі робочого часу кінотеатру (10:00 - 23:00)');
-            return;
-        }
-
-        const newStartTime = new Date(selectedDate);
-        newStartTime.setUTCHours(hours, minutes, 0, 0);
-
-        try {
-            await sessionsApi.move(sessionId, newStartTime.toISOString());
-            onScheduleUpdated();
-        } catch (err: any) {
-            showError(err.response?.data?.message || 'Обраний слот уже зайнятий іншим сеансом.');
-        }
-    };
-
-    const handleTrashDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDraggingOverTrash(false);
-        const sessionId = e.dataTransfer.getData('text/plain');
-        if (sessionId) {
-            onDeleteSession(sessionId);
-        }
+        const timeString = `${selectedDate}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        onCreateSessionForSlot(hallId, timeString);
     };
 
     const hourTicks = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
     const totalTimelineWidth = hourTicks.length * HOUR_WIDTH;
 
     return (
-        <div className="w-full bg-[#1a1c26] border border-white/5 p-6 rounded-2xl shadow-xl select-none flex flex-col gap-6 overflow-hidden">
+        <div className="w-full bg-[#1a1c26] border border-white/5 p-6 rounded-2xl shadow-xl select-none flex flex-col gap-6 overflow-hidden text-xs">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-[#ffbd14]" />
+                    <h2 className="text-lg font-black tracking-tight text-white">Візуальна таймлайн-сітка</h2>
+                </div>
+                <div className="flex items-center gap-4 text-[11px] text-gray-400">
+                    <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-md bg-[#ffbd14] inline-block"></span> Фільм
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-md bg-white/10 border border-dashed border-white/20 inline-block"></span> Клінінг (20 хв)
+                    </span>
+                    <span className="text-gray-500 italic">💡 Клікніть по вільному слоту для створення сеансу</span>
+                </div>
+            </div>
+
             <div className="w-full overflow-x-auto pb-4 no-scrollbar">
                 <div style={{ width: `${totalTimelineWidth + 160}px` }} className="relative flex flex-col gap-4">
-                    
                     <div className="grid grid-cols-[160px_1fr] items-center w-full h-8 border-b border-white/5">
-                        <div className="text-gray-500 font-mono text-[10px] pl-2 uppercase tracking-wider font-bold">Зали / Час</div>
+                        <div className="text-gray-500 font-mono text-[10px] pl-2 uppercase tracking-wider font-bold">
+                            Зали / Час (Kyiv)
+                        </div>
                         <div className="relative w-full h-full">
                             {hourTicks.map((hour, idx) => (
                                 <div
@@ -137,52 +121,104 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
 
                             return (
                                 <div key={hall.id} className="grid grid-cols-[160px_1fr] items-center w-full h-[76px]">
-                                    <div className="w-[150px] flex-shrink-0 font-black text-xs text-gray-300 truncate flex items-center gap-2 sticky left-0 bg-[#1a1c26] z-30 py-2 pr-2">
-                                        <Award className="w-3.5 h-3.5 text-[#ffbd14]" />
-                                        {hall.name.replace(" зал", "")}
+                                    <div className="w-[150px] flex-shrink-0 font-black text-xs text-gray-300 truncate flex items-center justify-between sticky left-0 bg-[#1a1c26] z-30 py-2 pr-2">
+                                        <span className="flex items-center gap-2 truncate">
+                                            <Award className="w-3.5 h-3.5 text-[#ffbd14] shrink-0" />
+                                            {hall.name.replace(" зал", "")}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => onCreateSessionForSlot(hall.id, `${selectedDate}T12:00`)}
+                                            className="p-1 hover:bg-white/10 rounded-md text-gray-400 hover:text-[#ffbd14] border-none bg-transparent cursor-pointer transition-colors"
+                                            title="Додати сеанс у цей зал"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                        </button>
                                     </div>
 
                                     <div
-                                        ref={(el) => { timelinesRef.current[hall.id] = el; }}
-                                        onDragOver={handleDragOver}
-                                        onDrop={(e) => handleDrop(e, hall.id)}
+                                        ref={(el) => { tracksRef.current[hall.id] = el; }}
+                                        onClick={(e) => handleTrackClick(e, hall.id)}
                                         style={{ width: `${(hourTicks.length - 1) * HOUR_WIDTH}px` }}
-                                        className="h-full bg-[#111219]/60 border border-white/5 rounded-xl relative overflow-hidden backdrop-blur-sm transition-colors hover:bg-[#111219]/90 shadow-inner"
+                                        className="h-full bg-[#111219]/60 border border-white/5 rounded-xl relative overflow-hidden backdrop-blur-sm transition-colors hover:bg-[#111219]/90 shadow-inner cursor-pointer group/track"
                                     >
+                                        {hourTicks.map((_, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="absolute top-0 bottom-0 w-px bg-white/[0.04] pointer-events-none"
+                                                style={{ left: `${idx * HOUR_WIDTH}px` }}
+                                            />
+                                        ))}
+
                                         {hallSessions.map((session) => {
                                             const sStartTime = session.startTime || (session as any).StartTime;
+                                            const sEndTime = session.endTime || (session as any).EndTime;
                                             const movieTitle = session.movieTitle || (session as any).MovieTitle;
                                             const basePriceVal = session.basePrice || (session as any).BasePrice;
-                                            const duration = session.movieDurationInMinutes || (session as any).MovieDurationInMinutes || 120;
-                                            const { left, width } = calculatePixelPosition(sStartTime, duration);
+                                            const rawDuration = session.movieDurationInMinutes || (session as any).MovieDurationInMinutes;
+
+                                            const duration = rawDuration || (sStartTime && sEndTime
+                                                ? Math.max(1, Math.round((new Date(sEndTime).getTime() - new Date(sStartTime).getTime()) / 60000))
+                                                : 120);
+
+                                            const startMinutes = getMinutesFromStart(sStartTime);
+                                            const leftPx = startMinutes * MINUTE_WIDTH;
+                                            const movieWidthPx = duration * MINUTE_WIDTH;
+                                            const cleanUpWidthPx = CLEAN_UP_DURATION * MINUTE_WIDTH;
 
                                             return (
                                                 <div
                                                     key={session.id}
-                                                    draggable
-                                                    onDragStart={(e) => handleDragStart(e, session.id)}
-                                                    style={{ left, width }}
-                                                    className="absolute top-1 bottom-1 bg-[#ffbd14] text-black rounded-xl p-2.5 flex flex-col justify-between shadow-md border border-black/10 group cursor-grab active:cursor-grabbing hover:brightness-105 transition-all z-10 hover:z-20 overflow-hidden"
-                                                    title={`${movieTitle} (${duration} хв)`}
+                                                    style={{ left: `${leftPx}px` }}
+                                                    className="session-block absolute top-1 bottom-1 flex items-stretch z-10 hover:z-20 group"
                                                 >
-                                                    <div className="flex justify-between items-start w-full relative min-w-0">
-                                                        <p className="text-[11px] font-black leading-tight text-black line-clamp-2 pr-6 break-words w-full">
-                                                            {movieTitle}
-                                                        </p>
-                                                        <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 absolute right-0 top-0 transition-opacity bg-[#ffbd14] pl-1 rounded-bl-md z-30">
-                                                            <button type="button" onClick={(e) => { e.stopPropagation(); onEditSession(session); }} className="p-0.5 hover:bg-black/15 rounded-md text-black border-none bg-transparent cursor-pointer"><Edit2 className="w-3 h-3 stroke-[2.5]" /></button>
-                                                            <button type="button" onClick={(e) => { e.stopPropagation(); onDeleteSession(session.id); }} className="p-0.5 hover:bg-black/15 rounded-md text-red-700 hover:text-red-900 border-none bg-transparent cursor-pointer"><Trash2 className="w-3 h-3 stroke-[2.5]" /></button>
+                                                    <div
+                                                        onClick={(e) => { e.stopPropagation(); onEditSession(session); }}
+                                                        style={{ width: `${movieWidthPx}px` }}
+                                                        className="bg-[#ffbd14] text-black rounded-l-xl rounded-r-md p-2 flex flex-col justify-between shadow-md border border-black/10 cursor-pointer hover:brightness-105 transition-all overflow-hidden relative"
+                                                        title={`${movieTitle} (${duration} хв)`}
+                                                    >
+                                                        <div className="flex justify-between items-start w-full relative min-w-0">
+                                                            <p className="text-[11px] font-black leading-tight text-black line-clamp-2 pr-5 break-words w-full">
+                                                                {movieTitle}
+                                                            </p>
+                                                            <div className="opacity-0 group-hover:opacity-100 flex gap-0.5 absolute right-0 top-0 transition-opacity bg-[#ffbd14] pl-1 rounded-bl-md z-30">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => { e.stopPropagation(); onEditSession(session); }}
+                                                                    className="p-0.5 hover:bg-black/15 rounded text-black border-none bg-transparent cursor-pointer"
+                                                                    title="Редагувати"
+                                                                >
+                                                                    <Edit2 className="w-3 h-3 stroke-[2.5]" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => { e.stopPropagation(); onDeleteSession(session.id); }}
+                                                                    className="p-0.5 hover:bg-black/15 rounded text-red-700 hover:text-red-900 border-none bg-transparent cursor-pointer"
+                                                                    title="Видалити"
+                                                                >
+                                                                    <Trash2 className="w-3 h-3 stroke-[2.5]" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex justify-between items-center w-full border-t border-black/15 pt-1 mt-auto leading-none min-w-0">
+                                                            <span className="text-[10px] font-black tracking-tight flex items-center gap-0.5 opacity-90 shrink-0">
+                                                                <Clock className="w-2.5 h-2.5 stroke-[2.5]" />
+                                                                {formatKyivTime(sStartTime)}
+                                                            </span>
+                                                            <span className="text-[10px] font-black bg-black/15 px-1 py-0.5 rounded shrink-0">
+                                                                {basePriceVal}₴
+                                                            </span>
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex justify-between items-center w-full border-t border-black/15 pt-1 mt-auto leading-none min-w-0">
-                                                        <span className="text-[10px] font-black tracking-tight flex items-center gap-0.5 opacity-90 shrink-0">
-                                                            <Clock className="w-2.5 h-2.5 stroke-[2.5]" />
-                                                            {new Date(sStartTime).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv' })}
-                                                        </span>
-                                                        <span className="text-[10px] font-black bg-black/15 px-1 py-0.5 rounded-md shrink-0">
-                                                            {basePriceVal}₴
-                                                        </span>
+                                                    <div
+                                                        style={{ width: `${cleanUpWidthPx}px` }}
+                                                        className="bg-[#ffbd14]/20 border-y border-r border-[#ffbd14]/30 rounded-r-xl flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity"
+                                                        title="Клінінг залу (20 хв)"
+                                                    >
+                                                        <span className="text-[8px] font-mono text-white/50 select-none">🧹</span>
                                                     </div>
                                                 </div>
                                             );
@@ -193,16 +229,6 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                         })}
                     </div>
                 </div>
-            </div>
-
-            <div
-                onDragOver={(e) => { e.preventDefault(); setIsDraggingOverTrash(true); }}
-                onDragLeave={() => setIsDraggingOverTrash(false)}
-                onDrop={handleTrashDrop}
-                className={`w-full border-2 border-dashed rounded-xl p-4 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all ${isDraggingOverTrash ? 'bg-red-500/10 border-red-500 text-red-500 scale-[0.99]' : 'bg-white/5 border-white/10 text-gray-500'}`}
-            >
-                <Trash2 className="w-4 h-4" />
-                <span>Перетягніть сеанс сюди для скасування / видалення</span>
             </div>
         </div>
     );
