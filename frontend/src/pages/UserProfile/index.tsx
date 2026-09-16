@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Ticket, ShieldAlert, User, UserMinus } from 'lucide-react';
 import { bookingsApi } from '@/api/bookings';
 import { usersApi } from '@/api/users';
@@ -10,6 +10,7 @@ import { ChangePasswordForm } from './components/ChangePasswordForm';
 import { BookingCard } from './components/BookingCard';
 
 export const UserProfilePage: React.FC = () => {
+    const navigate = useNavigate();
     const [bookings, setBookings] = useState<UserBookingDto[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'tickets' | 'settings'>('tickets');
@@ -50,7 +51,7 @@ export const UserProfilePage: React.FC = () => {
             await usersApi.deleteAccount();
             alert('Аккаунт успішно видалено.');
             localStorage.clear();
-            window.location.href = '/';
+            navigate('/', { replace: true });
         } catch (err) {
             alert('Не вдалося видалити аккаунт.');
         }
