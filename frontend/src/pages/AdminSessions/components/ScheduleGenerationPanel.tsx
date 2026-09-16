@@ -19,7 +19,7 @@ export const ScheduleGenerationPanel: React.FC<ScheduleGenerationPanelProps> = (
     cinemas,
     onScheduleGenerated
 }) => {
-    const { showError, showSuccess } = useToast();
+    const { showError, showSuccess, confirm } = useToast();
     const [movies, setMovies] = useState<MovieShortDto[]>([]);
     const [selectedCinemaId, setSelectedCinemaId] = useState<string>(currentCinemaId);
     const [targetDate, setTargetDate] = useState<string>(
@@ -57,7 +57,7 @@ export const ScheduleGenerationPanel: React.FC<ScheduleGenerationPanelProps> = (
         );
     };
 
-    const handleGenerate = async (e: React.FormEvent) => {
+    const handleGenerate = (e: React.FormEvent) => {
         e.preventDefault();
         
         if (new Date(targetDate) < new Date(new Date().toDateString())) {
@@ -70,32 +70,34 @@ export const ScheduleGenerationPanel: React.FC<ScheduleGenerationPanelProps> = (
             return;
         }
 
-        setIsSubmitting(true);
-        setStatusMessage(null);
+        confirm('Згенерувати розклад сеансів для обраного періоду та фільмів?', async () => {
+            setIsSubmitting(true);
+            setStatusMessage(null);
 
-        try {
-            const data = await sessionsApi.generateSchedule({
-                cinemaId: selectedCinemaId,
-                targetDate: new Date(targetDate).toISOString(),
-                basePrice: basePrice,
-                movieIds: selectedMovieIds
-            });
+            try {
+                const data = await sessionsApi.generateSchedule({
+                    cinemaId: selectedCinemaId,
+                    targetDate: new Date(targetDate).toISOString(),
+                    basePrice: basePrice,
+                    movieIds: selectedMovieIds
+                });
 
-            showSuccess(`Успішно сформовано новий розклад!`);
-            setStatusMessage({
-                type: 'success',
-                text: `🎉 Смарт-алгоритм успішно розрахував і згенерував ${data.count} сеансів! Розклад оптимізовано під робочі години (10:00 - 23:00) та інтегровано динамічні тарифи прайм-тайму.`
-            });
-            setSelectedMovieIds([]);
-            onScheduleGenerated();
-        } catch (err: any) {
-            setStatusMessage({
-                type: 'error',
-                text: err.response?.data?.message || 'Помилка генерації розкладу. Перевірте, чи не створено вже сеанси на цей день.'
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
+                showSuccess(`Успішно сформовано новий розклад!`);
+                setStatusMessage({
+                    type: 'success',
+                    text: `Успішно згенеровано ${data.count} сеансів для обраного дня.`
+                });
+                setSelectedMovieIds([]);
+                onScheduleGenerated();
+            } catch (err: any) {
+                setStatusMessage({
+                    type: 'error',
+                    text: err.response?.data?.message || 'Помилка генерації розкладу. Перевірте, чи не створено вже сеанси на цей день.'
+                });
+            } finally {
+                setIsSubmitting(false);
+            }
+        });
     };
 
     if (isLoading) {

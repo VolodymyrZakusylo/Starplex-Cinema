@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { Header } from '@/components/Header';
 import { ToastProvider } from '@/hooks/useToast';
@@ -34,6 +34,7 @@ const AdminLayoutWrapper = () => (
 function AppContent() {
   const { isAuthenticated } = useAuthStore();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isAdminOrCashierPage = location.pathname.startsWith('/admin') || location.pathname.startsWith('/cashier');
   const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
@@ -49,11 +50,11 @@ function AppContent() {
 
           <Route
             path="/login"
-            element={!isAuthenticated ? <LoginPage onSwitchToRegister={() => window.location.href = '/register'} /> : <Navigate to="/" replace />}
+            element={!isAuthenticated ? <LoginPage onSwitchToRegister={() => navigate('/register')} /> : <Navigate to="/" replace />}
           />
           <Route
             path="/register"
-            element={!isAuthenticated ? <RegisterPage onSwitchToLogin={() => window.location.href = '/login'} /> : <Navigate to="/" replace />}
+            element={!isAuthenticated ? <RegisterPage onSwitchToLogin={() => navigate('/login')} /> : <Navigate to="/" replace />}
           />
 
           <Route element={<ProtectedRoute />}>

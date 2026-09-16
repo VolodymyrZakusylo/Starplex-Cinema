@@ -4,6 +4,7 @@ import { moviesApi } from '@/api/movies';
 import type { MovieDto, TmdbSearchValue } from '@/types/movies';
 import { useToast } from '@/hooks/useToast';
 import { MovieFormModal } from './components/MovieFormModal';
+import { getMediaUrl } from '@/utils/media';
 
 export const AdminMoviesPage: React.FC = () => {
     const { confirm, showError, showSuccess } = useToast();
@@ -41,7 +42,8 @@ export const AdminMoviesPage: React.FC = () => {
             const data = await moviesApi.searchTmdb(tmdbQuery);
             setTmdbResults(data);
         } catch (err: any) {
-            showError(err.response?.data?.message || 'Помилка пошуку в базі TMDB.');
+            console.error('TMDB Search error:', err);
+            showError('Не вдалося виконати пошук у TMDB.');
         } finally {
             setIsSearchingTmdb(false);
         }
@@ -72,12 +74,7 @@ export const AdminMoviesPage: React.FC = () => {
 
     const getMoviePoster = (movie: MovieDto) => {
         const path = movie.effectivePosterUrl || movie.posterUrl;
-        if (!path) return 'https://placehold.co/400x600?text=No+Poster';
-        
-        if (path.startsWith('/uploads')) {
-            return `http://localhost:5108${path}`; 
-        }
-        return path;
+        return getMediaUrl(path);
     };
 
     return (

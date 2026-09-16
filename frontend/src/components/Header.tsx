@@ -3,13 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useCinemaStore } from '@/store/cinemaStore';
 import { MapPin, ShieldAlert } from 'lucide-react';
-import api from '@/api/axios';
-
-interface CinemaDto {
-  id: string;
-  name: string;
-  city: string;
-}
+import { cinemasApi } from '@/api/cinemas';
+import type { CinemaDto } from '@/types/cinemas';
 
 export const Header: React.FC = () => {
   const { isAuthenticated, user, logout } = useAuthStore();
@@ -23,11 +18,11 @@ export const Header: React.FC = () => {
   useEffect(() => {
     const fetchCinemas = async () => {
       try {
-        const response = await api.get<CinemaDto[]>('/Cinemas');
-        setCinemas(response.data);
+        const data = await cinemasApi.getAll();
+        setCinemas(data);
         
-        if (response.data.length > 0 && !selectedCinemaId) {
-          setCinemaId(response.data[0].id);
+        if (data.length > 0 && !selectedCinemaId) {
+          setCinemaId(data[0].id);
         }
       } catch (err) {
         console.error('Не вдалося завантажити філії кінотеатрів:', err);

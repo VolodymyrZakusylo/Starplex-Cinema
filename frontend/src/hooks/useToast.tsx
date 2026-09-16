@@ -55,8 +55,12 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                             >
                                 Скасувати
                             </button>
-                            <button 
-                                onClick={() => { dialog.onConfirm(); setDialog(null); }} 
+                            <button
+                                onClick={() => {
+                                    const handleConfirm = dialog.onConfirm;
+                                    setDialog(null);
+                                    handleConfirm();
+                                }}
                                 className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 rounded-xl font-bold text-xs uppercase text-white transition-all cursor-pointer border-none"
                             >
                                 Підтвердити
