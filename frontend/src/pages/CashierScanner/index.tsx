@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { CheckCircle2, XCircle, ShieldCheck, ScanLine, Film, MapPin, Armchair, ArrowRight } from 'lucide-react';
 import { bookingsApi } from '@/api/bookings';
@@ -7,6 +7,17 @@ import type { ScanResultDto } from '@/types/bookings';
 export const CashierScannerPage: React.FC = () => {
     const [scanResult, setScanResult] = useState<ScanResultDto | null>(null);
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+    const isProcessingRef = useRef<boolean>(false);
+    const scanResultRef = useRef<ScanResultDto | null>(null);
+
+    useEffect(() => {
+        isProcessingRef.current = isProcessing;
+    }, [isProcessing]);
+
+    useEffect(() => {
+        scanResultRef.current = scanResult;
+    }, [scanResult]);
 
     useEffect(() => {
         const scanner = new Html5QrcodeScanner(
@@ -20,18 +31,23 @@ export const CashierScannerPage: React.FC = () => {
         );
 
         const onScanSuccess = async (decodedText: string) => {
-            if (isProcessing || scanResult) return;
+            if (isProcessingRef.current || scanResultRef.current) return;
             
+            isProcessingRef.current = true;
             setIsProcessing(true);
             try {
                 const data = await bookingsApi.scanTicket(decodedText.trim());
+                scanResultRef.current = data;
                 setScanResult(data);
             } catch (err: any) {
-                setScanResult({
+                const errResult: ScanResultDto = {
                     isSuccess: false,
                     message: err.response?.data?.message || "Помилка сервера або недійсний код квитка."
-                });
+                };
+                scanResultRef.current = errResult;
+                setScanResult(errResult);
             } finally {
+                isProcessingRef.current = false;
                 setIsProcessing(false);
             }
         };
@@ -44,9 +60,10 @@ export const CashierScannerPage: React.FC = () => {
         return () => {
             scanner.clear().catch(err => console.error("Помилка зупинки камери сканера:", err));
         };
-    }, [isProcessing, scanResult]);
+    }, []);
 
     const handleClearAndNext = () => {
+        scanResultRef.current = null;
         setScanResult(null);
     };
 
