@@ -33,7 +33,17 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
 
     const getMinutesFromStart = (isoString: string) => {
         const date = new Date(isoString);
-        return Math.max(0, (date.getUTCHours() * 60 + date.getUTCMinutes()) - START_HOUR * 60);
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Europe/Kyiv',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: false
+        });
+        const parts = formatter.formatToParts(date);
+        const hourVal = parts.find(p => p.type === 'hour')?.value || '0';
+        const hour = parseInt(hourVal, 10) % 24;
+        const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+        return Math.max(0, (hour * 60 + minute) - START_HOUR * 60);
     };
 
     const calculatePixelPosition = (startTime: string, movieDuration: number) => {
@@ -168,7 +178,7 @@ export const InteractiveTimeline: React.FC<InteractiveTimelineProps> = ({
                                                     <div className="flex justify-between items-center w-full border-t border-black/15 pt-1 mt-auto leading-none min-w-0">
                                                         <span className="text-[10px] font-black tracking-tight flex items-center gap-0.5 opacity-90 shrink-0">
                                                             <Clock className="w-2.5 h-2.5 stroke-[2.5]" />
-                                                            {new Date(sStartTime).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}
+                                                            {new Date(sStartTime).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv' })}
                                                         </span>
                                                         <span className="text-[10px] font-black bg-black/15 px-1 py-0.5 rounded-md shrink-0">
                                                             {basePriceVal}₴

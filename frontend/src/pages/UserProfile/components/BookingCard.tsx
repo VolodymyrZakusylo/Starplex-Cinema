@@ -21,7 +21,7 @@ export const BookingCard: React.FC<BookingCardProps> = ({
         year: 'numeric', 
         hour: '2-digit', 
         minute: '2-digit',
-        timeZone: 'UTC' 
+        timeZone: 'Europe/Kyiv'
     }) : '';
 
     const movieImageUrl = (booking as any).movieImageUrl || (booking as any).moviePosterUrl;

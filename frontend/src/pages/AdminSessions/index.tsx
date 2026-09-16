@@ -8,6 +8,7 @@ import { hallsApi } from '@/api/halls';
 import { sessionsApi } from '@/api/sessions';
 import { useToast } from '@/hooks/useToast';
 
+import { getKyivDateString } from '@/utils/date';
 import { ManualScheduleManager } from './components/ManualScheduleManager';
 import { ScheduleGenerationPanel } from './components/ScheduleGenerationPanel';
 import { InteractiveTimeline } from './components/InteractiveTimeline';
@@ -31,7 +32,7 @@ export const AdminSessionsPage: React.FC = () => {
     const [sessions, setSessions] = useState<SessionDto[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
-    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState<string>(() => getKyivDateString(0));
     const [dateTabs, setDateTabs] = useState<string[]>([]);
 
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -49,9 +50,7 @@ export const AdminSessionsPage: React.FC = () => {
     useEffect(() => {
         const dates = [];
         for (let i = 0; i < 7; i++) {
-            const d = new Date();
-            d.setDate(d.getDate() + i);
-            dates.push(d.toISOString().split('T')[0]);
+            dates.push(getKyivDateString(i));
         }
         setDateTabs(dates);
     }, []);
@@ -119,7 +118,8 @@ export const AdminSessionsPage: React.FC = () => {
         if (!timeRaw) return false;
         const isActive = (currentStatus as any) === 'Active' || (currentStatus as any) === 0;
 
-        return timeRaw.split('T')[0] === selectedDate && isActive;
+        const sessionKyivDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(new Date(timeRaw));
+        return sessionKyivDate === selectedDate && isActive;
     });
 
     const searchedMovies = movies.filter(m =>
@@ -211,8 +211,11 @@ export const AdminSessionsPage: React.FC = () => {
 
     const formatTime = (isoString: string) => {
         if (!isoString) return '00:00';
-        const date = new Date(isoString);
-        return `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`;
+        return new Date(isoString).toLocaleTimeString('uk-UA', {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'Europe/Kyiv'
+        });
     };
 
     return (
