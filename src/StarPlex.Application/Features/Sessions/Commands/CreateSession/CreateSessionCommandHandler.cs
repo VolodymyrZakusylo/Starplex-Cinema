@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Exceptions;
+using StarPlex.Application.Common.Helpers;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
 using StarPlex.Domain.Enums;
@@ -49,6 +50,20 @@ public class CreateSessionCommandHandler : IRequestHandler<CreateSessionCommand,
 
         var cleanUpDuration = Session.CleanUpDurationInMinutes;
         var endTimeUtc = startTimeUtc.AddMinutes(movie.DurationInMinutes + cleanUpDuration);
+
+        var kyivTzi = TimeZoneHelpers.KyivTimeZone;
+        var startTimeKyiv = TimeZoneInfo.ConvertTimeFromUtc(startTimeUtc, kyivTzi);
+        var occupiedEndTimeKyiv = TimeZoneInfo.ConvertTimeFromUtc(endTimeUtc, kyivTzi);
+
+        var startOfWorkingDayKyiv = new DateTime(startTimeKyiv.Year, startTimeKyiv.Month, startTimeKyiv.Day, 10, 0, 0);
+        var endOfWorkingDayKyiv = new DateTime(startTimeKyiv.Year, startTimeKyiv.Month, startTimeKyiv.Day, 23, 0, 0);
+
+        if (startTimeKyiv.Date != occupiedEndTimeKyiv.Date ||
+            startTimeKyiv < startOfWorkingDayKyiv ||
+            occupiedEndTimeKyiv > endOfWorkingDayKyiv)
+        {
+            throw new BusinessRuleException("Session time falls outside cinema working hours (10:00 - 23:00 Kyiv time).");
+        }
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var hasCollision = await _context.Sessions
