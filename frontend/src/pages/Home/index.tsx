@@ -141,8 +141,18 @@ export const HomePage: React.FC = () => {
       )}
 
       {!isLoading && filteredMovies.length === 0 && (
-        <div className="text-center py-20 bg-dark-secondary rounded-2xl border border-white/5 p-6 shadow-inner">
-          <p className="text-gray-400 text-sm">Нічого не знайдено за вказаними критеріями фільтрації 🍿</p>
+        <div className="text-center py-20 bg-dark-secondary rounded-2xl border border-white/5 p-6 shadow-inner flex flex-col items-center justify-center gap-4">
+          <p className="text-gray-400 text-sm">Нічого не знайдено за вказаними критеріями фільтрації.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery('');
+              setSelectedGenre('All');
+            }}
+            className="bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all border-none cursor-pointer"
+          >
+            Скинути фільтри
+          </button>
         </div>
       )}
 

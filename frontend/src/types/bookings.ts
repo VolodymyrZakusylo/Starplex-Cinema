@@ -67,7 +67,7 @@ export interface ScanResultDto {
   ticketCode?: string;
   movieTitle?: string;
   hallName?: string;
+  startTime?: string;
   row?: string;
-  seatNumber?: number;
-  scannedAt?: string;
+  number?: number;
 }

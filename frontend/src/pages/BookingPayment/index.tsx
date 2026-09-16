@@ -129,8 +129,8 @@ export const BookingPaymentPage: React.FC = () => {
         return (
             <div className="text-center py-40 text-white flex flex-col items-center justify-center gap-4">
                 <p className="text-red-400 font-bold">Критична помилка: Сесійні дані платежу відсутні.</p>
-                <button type="button" onClick={() => navigate(-1)} className="bg-white/5 border border-white/10 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white border-none cursor-pointer hover:bg-white/10 transition-all">
-                    Назад до зали
+                <button type="button" onClick={() => navigate('/')} className="bg-white/5 border border-white/10 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white border-none cursor-pointer hover:bg-white/10 transition-all">
+                    Повернутися на головну
                 </button>
             </div>
         );

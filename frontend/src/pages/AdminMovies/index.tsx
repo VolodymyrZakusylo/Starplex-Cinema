@@ -42,7 +42,8 @@ export const AdminMoviesPage: React.FC = () => {
             const data = await moviesApi.searchTmdb(tmdbQuery);
             setTmdbResults(data);
         } catch (err: any) {
-            showError(err.response?.data?.message || 'Помилка пошуку в базі TMDB.');
+            console.error('TMDB Search error:', err);
+            showError('Не вдалося виконати пошук у TMDB.');
         } finally {
             setIsSearchingTmdb(false);
         }
