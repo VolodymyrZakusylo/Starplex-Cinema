@@ -6,6 +6,7 @@ import { MovieTrailer } from './components/MovieTrailer';
 import { MovieSchedule } from './components/MovieSchedule';
 import { useToast } from '@/hooks/useToast';
 import type { MovieDto } from '@/types/index';
+import { getMediaUrl } from '@/utils/media';
 
 export const MovieDetailsPage: React.FC = () => {
     const { id: slugWithId } = useParams<{ id: string }>();
@@ -70,9 +71,7 @@ export const MovieDetailsPage: React.FC = () => {
 
     const getMoviePoster = (moviePath: MovieDto) => {
         const path = moviePath.effectivePosterUrl || moviePath.posterUrl;
-        if (!path) return 'https://placehold.co/400x600?text=No+Poster';
-        if (path.startsWith('/uploads')) return `http://localhost:5108${path}`; 
-        return path;
+        return getMediaUrl(path);
     };
 
     return (

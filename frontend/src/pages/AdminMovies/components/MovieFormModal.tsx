@@ -3,6 +3,7 @@ import { Clock, Tv, Upload, Link } from 'lucide-react';
 import { moviesApi } from '@/api/movies';
 import type { MovieDto } from '@/types/movies';
 import { useToast } from '@/hooks/useToast';
+import { getMediaUrl } from '@/utils/media';
 
 interface MovieFormModalProps {
     editingMovie: MovieDto | null;
@@ -44,9 +45,7 @@ export const MovieFormModal: React.FC<MovieFormModalProps> = ({ editingMovie, on
             const rawPoster = editingMovie.effectivePosterUrl || editingMovie.posterUrl || '';
             const validRawPoster = (rawPoster && rawPoster !== 'undefined') ? rawPoster : '';
             
-            const fullPosterUrl = validRawPoster.startsWith('/uploads')
-                ? `http://localhost:5108${validRawPoster}`
-                : validRawPoster;
+            const fullPosterUrl = getMediaUrl(validRawPoster, '');
 
             setImagePreview(fullPosterUrl);
             setPosterType(validRawPoster.startsWith('http') ? 'url' : 'file');

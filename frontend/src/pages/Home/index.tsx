@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, SlidersHorizontal, Clock, Star, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import type { Movie, CinemaDto } from '@/types';
+import { getMediaUrl } from '@/utils/media';
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -70,12 +71,7 @@ export const HomePage: React.FC = () => {
 
   const getMoviePoster = (movie: Movie) => {
     const path = movie.effectivePosterUrl || movie.posterUrl;
-    if (!path) return 'https://placehold.co/400x600?text=No+Poster';
-
-    if (path.startsWith('/uploads')) {
-      return `http://localhost:5108${path}`;
-    }
-    return path;
+    return getMediaUrl(path);
   };
 
   return (

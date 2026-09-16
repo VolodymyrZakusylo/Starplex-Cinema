@@ -16,7 +16,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:5108',
-      
+      '/uploads': 'http://localhost:5108',
       '/hub': {
         target: 'http://localhost:5108',
         changeOrigin: true,
