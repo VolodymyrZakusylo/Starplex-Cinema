@@ -16,6 +16,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     
     protected IApplicationDbContext DbContext { get; private set; } = null!;
     protected IMediator Mediator { get; private set; } = null!;
+    protected IServiceProvider ServiceProvider => _scope.ServiceProvider;
     
     // Mocks for external dependencies
     protected Mock<IPaymentService> PaymentServiceMock { get; } = new();

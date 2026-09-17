@@ -160,7 +160,9 @@ public class CinemaScopeTests : IntegrationTestBase
         }
         if (operation == "Sale")
         {
-            DbContext.Seats.Add(new Seat(f.HallA.Id, "2", 2, SeatType.Standard));
+            var saleSeat = new Seat(f.HallA.Id, "2", 2, SeatType.Standard);
+            DbContext.Seats.Add(saleSeat);
+            DbContext.SelectedSeats.Add(new SelectedSeat(f.SessionA.Id, saleSeat.Id, _callerId, DateTime.UtcNow.AddMinutes(10)));
             await DbContext.SaveChangesAsync(default);
             before = await Snapshot();
         }
