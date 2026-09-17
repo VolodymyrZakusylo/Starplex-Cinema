@@ -10,21 +10,39 @@ namespace StarPlex.Application.Features.Sessions.Commands.MoveSession;
 public class MoveSessionCommandHandler : IRequestHandler<MoveSessionCommand, bool>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
     private const int CleanUpDurationInMinutes = 20;
 
-    public MoveSessionCommandHandler(IApplicationDbContext context)
+    public MoveSessionCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<bool> Handle(MoveSessionCommand request, CancellationToken cancellationToken)
     {
         var session = await _context.Sessions
             .Include(s => s.Movie)
+            .Include(s => s.Hall)
             .FirstOrDefaultAsync(s => s.Id == request.SessionId, cancellationToken);
 
         if (session == null)
             throw new NotFoundException("Session", request.SessionId);
+
+        var targetHall = await _context.Halls
+            .AsNoTracking()
+            .FirstOrDefaultAsync(h => h.Id == request.HallId, cancellationToken);
+
+        if (targetHall == null)
+            throw new NotFoundException("Cinema Hall", request.HallId);
+
+        if (!_currentUserService.IsSuperAdmin &&
+            (!_currentUserService.CinemaId.HasValue ||
+             _currentUserService.CinemaId != session.Hall.CinemaId ||
+             _currentUserService.CinemaId != targetHall.CinemaId))
+        {
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
+        }
 
         if (session.OriginalPrice == 0 && session.BasePrice > 0)
         {

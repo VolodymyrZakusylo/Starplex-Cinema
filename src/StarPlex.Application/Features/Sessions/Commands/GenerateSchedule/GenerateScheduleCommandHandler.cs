@@ -11,15 +11,23 @@ namespace StarPlex.Application.Features.Sessions.Commands.GenerateSchedule;
 public class GenerateScheduleCommandHandler : IRequestHandler<GenerateScheduleCommand, int>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
     private const int CleanUpDurationInMinutes = 20;
 
-    public GenerateScheduleCommandHandler(IApplicationDbContext context)
+    public GenerateScheduleCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<int> Handle(GenerateScheduleCommand request, CancellationToken cancellationToken)
     {
+        if (!_currentUserService.IsSuperAdmin &&
+            (!_currentUserService.CinemaId.HasValue || _currentUserService.CinemaId != request.CinemaId))
+        {
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
+        }
+
         var kyivTzi = TimeZoneHelpers.KyivTimeZone;
         var nowKyiv = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, kyivTzi);
         var todayKyivDate = nowKyiv.Date;

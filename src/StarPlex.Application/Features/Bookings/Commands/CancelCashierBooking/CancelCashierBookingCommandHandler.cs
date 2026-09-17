@@ -14,22 +14,31 @@ public class CancelCashierBookingCommandHandler : IRequestHandler<CancelCashierB
 {
     private readonly IApplicationDbContext _context;
     private readonly ISeatHubService _seatHubService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public CancelCashierBookingCommandHandler(IApplicationDbContext context, ISeatHubService seatHubService)
+    public CancelCashierBookingCommandHandler(IApplicationDbContext context, ISeatHubService seatHubService, ICurrentUserService currentUserService)
     {
         _context = context;
         _seatHubService = seatHubService;
+        _currentUserService = currentUserService;
     }
 
     public async Task<bool> Handle(CancelCashierBookingCommand request, CancellationToken cancellationToken)
     {
         var booking = await _context.Bookings
             .Include(b => b.BookingSeats)
+            .Include(b => b.Session).ThenInclude(s => s.Hall)
             .FirstOrDefaultAsync(b => b.Id == request.BookingId, cancellationToken);
 
         if (booking == null)
         {
             return false;
+        }
+
+        if (!_currentUserService.IsSuperAdmin &&
+            (!_currentUserService.CinemaId.HasValue || _currentUserService.CinemaId != booking.Session.Hall.CinemaId))
+        {
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
         }
 
         if (booking.UserId != Guid.Empty)

@@ -12,6 +12,11 @@ namespace StarPlex.Application.IntegrationTests.Features.Sessions;
 
 public class GenerateScheduleCommandHandlerTests : IntegrationTestBase
 {
+    public GenerateScheduleCommandHandlerTests()
+    {
+        CurrentUserServiceMock.Setup(u => u.IsSuperAdmin).Returns(true);
+    }
+
     [Fact]
     public async Task GenerateSchedule_WhenTargetDateIsInPastInKyiv_ShouldThrowBusinessRuleException()
     {

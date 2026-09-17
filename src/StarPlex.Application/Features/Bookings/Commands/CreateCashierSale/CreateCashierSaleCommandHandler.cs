@@ -12,10 +12,12 @@ namespace StarPlex.Application.Features.Bookings.Commands.CreateCashierSale;
 public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSaleCommand, Guid>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public CreateCashierSaleCommandHandler(IApplicationDbContext context)
+    public CreateCashierSaleCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<Guid> Handle(CreateCashierSaleCommand request, CancellationToken cancellationToken)
@@ -27,10 +29,17 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
 
         var session = await _context.Sessions
             .AsNoTracking()
+            .Include(s => s.Hall)
             .FirstOrDefaultAsync(s => s.Id == request.SessionId, cancellationToken);
 
         if (session == null)
             throw new NotFoundException("Session", request.SessionId);
+
+        if (!_currentUserService.IsSuperAdmin &&
+            (!_currentUserService.CinemaId.HasValue || _currentUserService.CinemaId != session.Hall.CinemaId))
+        {
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
+        }
 
         var seats = await _context.Seats
             .AsNoTracking()
