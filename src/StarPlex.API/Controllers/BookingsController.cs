@@ -28,12 +28,14 @@ public class BookingsController : ControllerBase
     private readonly IMediator _mediator;
     private readonly ITicketService _ticketService;
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public BookingsController(IMediator mediator, ITicketService ticketService, IApplicationDbContext context)
+    public BookingsController(IMediator mediator, ITicketService ticketService, IApplicationDbContext context, ICurrentUserService currentUserService)
     {
         _mediator = mediator;
         _ticketService = ticketService;
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     [HttpGet("session/{sessionId}/seats")]
@@ -151,12 +153,16 @@ public class BookingsController : ControllerBase
 
             var booking = await _context.Bookings
                 .Include(b => b.BookingSeats)
+                .Include(b => b.Session).ThenInclude(s => s.Hall)
                 .FirstOrDefaultAsync(b => b.Id == bookingId, cancellationToken);
 
             if (booking == null) return NotFound(new { Message = "Booking not found." });
 
             bool isOwner = booking.UserId == currentUserId.Value;
-            bool isStaff = User.IsInRole("Cashier") || User.IsInRole("CinemaManager") || User.IsInRole("SuperAdmin");
+            bool isStaff = User.IsInRole("SuperAdmin") ||
+                ((User.IsInRole("Cashier") || User.IsInRole("CinemaManager")) &&
+                 _currentUserService.CinemaId.HasValue &&
+                 _currentUserService.CinemaId == booking.Session.Hall.CinemaId);
 
             if (!isOwner && !isStaff)
                 return Forbid();

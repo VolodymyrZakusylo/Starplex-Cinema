@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
+using StarPlex.Application.Common.Exceptions;
 using StarPlex.Domain.Enums;
 using System;
 using System.Threading;
@@ -11,10 +12,12 @@ namespace StarPlex.Application.Features.Bookings.Commands.ScanTicket;
 public class ScanTicketCommandHandler : IRequestHandler<ScanTicketCommand, ScanTicketResultDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public ScanTicketCommandHandler(IApplicationDbContext context)
+    public ScanTicketCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<ScanTicketResultDto> Handle(ScanTicketCommand request, CancellationToken cancellationToken)
@@ -36,6 +39,12 @@ public class ScanTicketCommandHandler : IRequestHandler<ScanTicketCommand, ScanT
 
         var booking = ticket.BookingSeat.Booking;
         var session = booking.Session;
+
+        if (!_currentUserService.IsSuperAdmin &&
+            (!_currentUserService.CinemaId.HasValue || _currentUserService.CinemaId != session.Hall.CinemaId))
+        {
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
+        }
 
         var utcNow = DateTime.UtcNow;
         var scanResult = ticket.Scan(utcNow, session);

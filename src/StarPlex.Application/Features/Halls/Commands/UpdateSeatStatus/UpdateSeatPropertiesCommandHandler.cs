@@ -10,17 +10,20 @@ namespace StarPlex.Application.Features.Halls.Commands.UpdateSeatProperties;
 public class UpdateSeatPropertiesCommandHandler : IRequestHandler<UpdateSeatPropertiesCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
     private readonly IPaymentService _paymentService;
     private readonly ILogger<UpdateSeatPropertiesCommandHandler> _logger;
 
     public UpdateSeatPropertiesCommandHandler(
         IApplicationDbContext context,
         IPaymentService paymentService,
-        ILogger<UpdateSeatPropertiesCommandHandler> logger)
+        ILogger<UpdateSeatPropertiesCommandHandler> logger,
+        ICurrentUserService currentUserService)
     {
         _context = context;
         _paymentService = paymentService;
         _logger = logger;
+        _currentUserService = currentUserService;
     }
 
     public async Task<Unit> Handle(UpdateSeatPropertiesCommand request, CancellationToken cancellationToken)
@@ -29,10 +32,17 @@ public class UpdateSeatPropertiesCommandHandler : IRequestHandler<UpdateSeatProp
             throw new InvalidOperationException("Database context is not compatible with transactions.");
 
         var seat = await _context.Seats
+            .Include(s => s.Hall)
             .FirstOrDefaultAsync(s => s.Id == request.SeatId, cancellationToken);
 
         if (seat == null)
             throw new NotFoundException("Seat", request.SeatId);
+
+        if (!_currentUserService.IsSuperAdmin &&
+            (!_currentUserService.CinemaId.HasValue || _currentUserService.CinemaId != seat.Hall.CinemaId))
+        {
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
+        }
 
         if (request.Status != SeatStatus.Inactive || seat.Status == SeatStatus.Inactive)
         {

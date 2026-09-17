@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
+using StarPlex.Application.Common.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,21 +13,29 @@ namespace StarPlex.Application.Features.Bookings.Queries.GetCashierRecentSales;
 public class GetCashierRecentSalesQueryHandler : IRequestHandler<GetCashierRecentSalesQuery, List<CashierSaleDto>>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetCashierRecentSalesQueryHandler(IApplicationDbContext context)
+    public GetCashierRecentSalesQueryHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<List<CashierSaleDto>> Handle(GetCashierRecentSalesQuery request, CancellationToken cancellationToken)
     {
+        if (!_currentUserService.IsSuperAdmin && !_currentUserService.CinemaId.HasValue)
+        {
+            throw new ForbiddenException("You do not have permission to manage this cinema.");
+        }
+
         var today = DateTime.UtcNow.Date;
 
         var sales = await _context.Bookings
             .AsNoTracking()
             .Include(b => b.Session).ThenInclude(s => s.Movie)
             .Include(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
-            .Where(b => b.UserId == Guid.Empty
+            .Where(b => (_currentUserService.IsSuperAdmin || b.Session.Hall.CinemaId == _currentUserService.CinemaId)
+                     && b.UserId == Guid.Empty
                      && b.BookingTime >= today)
             .OrderByDescending(b => b.BookingTime)
             .ToListAsync(cancellationToken);

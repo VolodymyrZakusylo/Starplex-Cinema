@@ -10,6 +10,11 @@ namespace StarPlex.Application.IntegrationTests.Features.Bookings;
 
 public class ScanTicketCommandHandlerTests : IntegrationTestBase
 {
+    public ScanTicketCommandHandlerTests()
+    {
+        CurrentUserServiceMock.Setup(u => u.IsSuperAdmin).Returns(true);
+    }
+
     [Fact]
     public async Task ScanTicket_WhenTicketCodeIsValid_ShouldMarkTicketAsUsedAndReturnSuccessDto()
     {
