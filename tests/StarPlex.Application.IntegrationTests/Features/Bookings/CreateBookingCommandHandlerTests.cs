@@ -55,7 +55,7 @@ public class CreateBookingCommandHandlerTests : IntegrationTestBase
             .ReturnsAsync(new List<Guid> { seat1.Id, seat2.Id });
 
         PaymentServiceMock
-            .Setup(p => p.CreatePaymentIntentAsync(It.IsAny<Guid>(), It.IsAny<decimal>(), "uah", It.IsAny<CancellationToken>()))
+            .Setup(p => p.CreatePaymentIntentAsync(It.IsAny<Guid>(), It.IsAny<decimal>(), "uah", It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("pi_test_123");
 
         var result = await Mediator.Send(request);

@@ -13,135 +13,206 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
 {
     private readonly IApplicationDbContext _context;
     private readonly IPaymentService _paymentService;
-    private readonly ISeatLockService _seatLockService;
 
     public CreateBookingCommandHandler(
         IApplicationDbContext context,
-        IPaymentService paymentService,
-        ISeatLockService seatLockService)
+        IPaymentService paymentService)
     {
         _context = context;
         _paymentService = paymentService;
-        _seatLockService = seatLockService;
     }
 
     public async Task<BookingResponseDto> Handle(CreateBookingCommand request, CancellationToken cancellationToken)
     {
+        if (_context is not DbContext dbContext)
+            throw new InvalidOperationException("Database context is not compatible with transactions.");
+
         var utcNow = DateTime.UtcNow;
+        var requestedSeatSet = request.SeatIds.ToHashSet();
 
-        var session = await _context.Sessions
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == request.SessionId, cancellationToken);
+        Booking targetBooking;
+        Payment targetPayment;
 
-        if (session == null)
-            throw new NotFoundException("Session", request.SessionId);
-
-        var lockedSeatIds = await _seatLockService.GetLockedSeatIdsAsync(request.SessionId, cancellationToken);
-
-        var validUserLocksCount = await _context.SelectedSeats
-            .AsNoTracking()
-            .Where(ss => ss.SessionId == request.SessionId &&
-                         ss.UserId == request.UserId &&
-                         request.SeatIds.Contains(ss.SeatId) &&
-                         lockedSeatIds.Contains(ss.SeatId))
-            .CountAsync(cancellationToken);
-
-        if (validUserLocksCount != request.SeatIds.Count)
+        await using (var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken))
         {
-            throw new BusinessRuleException("Your reservation session for some of these seats has expired or is invalid.");
-        }
-
-        var seats = await _context.Seats
-            .AsNoTracking()
-            .Where(s => request.SeatIds.Contains(s.Id))
-            .ToListAsync(cancellationToken);
-
-        if (seats.Any(s => s.Status == SeatStatus.Inactive))
-            throw new BusinessRuleException("One or more selected seats are undergoing technical maintenance and cannot be purchased.");
-
-        decimal totalPrice = 0;
-        var bookingId = Guid.NewGuid();
-        var bookingSeats = new List<BookingSeat>();
-
-        foreach (var seat in seats)
-        {
-            totalPrice += PricingCalculator.CalculateTicketPrice(session.BasePrice, seat.Type);
-
-            var bookingSeat = new BookingSeat(bookingId, seat.Id) { Id = Guid.NewGuid() };
-            bookingSeats.Add(bookingSeat);
-        }
-
-        Discount? appliedDiscount = null;
-        if (!string.IsNullOrWhiteSpace(request.PromoCode))
-        {
-            var discount = await _context.Discounts
-                .FirstOrDefaultAsync(d => d.Code.ToLower() == request.PromoCode.Trim().ToLower(), cancellationToken);
-
-            if (discount != null && discount.IsActive && utcNow >= discount.ValidFrom && utcNow <= discount.ValidTo && discount.UsageCount < discount.UsageLimit)
+            // Lock session row to serialize concurrent booking attempts for the same session
+            if (dbContext.Database.ProviderName?.Contains("Npgsql") == true)
             {
-                appliedDiscount = discount;
-                totalPrice = PricingCalculator.ApplyDiscount(totalPrice, discount.Percentage);
+                await dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Sessions\" WHERE \"Id\" = {request.SessionId} FOR UPDATE", cancellationToken);
+            }
+
+            var session = await _context.Sessions
+                .FirstOrDefaultAsync(s => s.Id == request.SessionId, cancellationToken);
+
+            if (session == null)
+                throw new NotFoundException("Session", request.SessionId);
+
+            // Ensure caller holds an active lock for every requested seat
+            var validCallerLocks = await _context.SelectedSeats
+                .Where(ss => ss.SessionId == request.SessionId &&
+                             request.SeatIds.Contains(ss.SeatId) &&
+                             ss.UserId == request.UserId &&
+                             ss.LockedUntil > utcNow)
+                .ToListAsync(cancellationToken);
+
+            if (validCallerLocks.Count != request.SeatIds.Count)
+            {
+                throw new BusinessRuleException("Your reservation session for some of these seats has expired or is invalid.");
+            }
+
+            // Reuse an active pending booking if the customer is retrying the exact same seat set
+            var candidatePendingBookings = await _context.Bookings
+                .Include(b => b.BookingSeats)
+                .Include(b => b.Payment)
+                .Where(b => b.SessionId == request.SessionId &&
+                            b.UserId == request.UserId &&
+                            b.Status == BookingStatus.Pending)
+                .ToListAsync(cancellationToken);
+
+            var reusableBooking = candidatePendingBookings.FirstOrDefault(b =>
+                b.BookingSeats.Count == requestedSeatSet.Count &&
+                b.BookingSeats.Select(bs => bs.SeatId).ToHashSet().SetEquals(requestedSeatSet));
+
+            // Enforce seat occupancy against any active booking except the exact attempt being reused
+            var occupiedSeatQuery = _context.BookingSeats
+                .Where(bs => bs.Booking.SessionId == request.SessionId &&
+                             request.SeatIds.Contains(bs.SeatId) &&
+                             (bs.Booking.Status == BookingStatus.Confirmed || bs.Booking.Status == BookingStatus.Pending));
+
+            if (reusableBooking != null)
+            {
+                occupiedSeatQuery = occupiedSeatQuery.Where(bs => bs.BookingId != reusableBooking.Id);
+            }
+
+            var conflictingSeatIds = await occupiedSeatQuery
+                .Select(bs => bs.SeatId)
+                .ToListAsync(cancellationToken);
+
+            if (conflictingSeatIds.Any())
+            {
+                var seatsForDesc = await _context.Seats
+                    .Where(s => conflictingSeatIds.Contains(s.Id))
+                    .ToListAsync(cancellationToken);
+                var seatDescs = string.Join(", ", seatsForDesc.Select(s => $"Row {s.Row}, Seat {s.Number}"));
+                throw new BusinessRuleException($"The following seat(s) are already booked or sold for this session: {seatDescs}.");
+            }
+
+            if (reusableBooking != null)
+            {
+                targetBooking = reusableBooking;
+                if (reusableBooking.Payment != null)
+                {
+                    targetPayment = reusableBooking.Payment;
+                }
+                else
+                {
+                    targetPayment = new Payment(reusableBooking.Id, string.Empty, reusableBooking.TotalPrice, PaymentStatus.Pending)
+                    {
+                        Id = Guid.NewGuid()
+                    };
+                    _context.Payments.Add(targetPayment);
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+
+                await transaction.CommitAsync(cancellationToken);
             }
             else
             {
-                throw new BusinessRuleException("The promo code provided is invalid, expired, or has reached its usage limit.");
+                var seats = await _context.Seats
+                    .Where(s => s.HallId == session.HallId && request.SeatIds.Contains(s.Id))
+                    .ToListAsync(cancellationToken);
+
+                if (seats.Count != request.SeatIds.Count)
+                    throw new BusinessRuleException("Some of the selected seats were not found in this hall.");
+
+                if (seats.Any(s => s.Status == SeatStatus.Inactive))
+                    throw new BusinessRuleException("One or more selected seats are undergoing technical maintenance and cannot be purchased.");
+
+                decimal totalPrice = 0;
+                var bookingId = Guid.NewGuid();
+                var bookingSeats = new List<BookingSeat>();
+
+                foreach (var seat in seats)
+                {
+                    totalPrice += PricingCalculator.CalculateTicketPrice(session.BasePrice, seat.Type);
+                    var bookingSeat = new BookingSeat(bookingId, seat.Id) { Id = Guid.NewGuid() };
+                    bookingSeats.Add(bookingSeat);
+                }
+
+                Discount? appliedDiscount = null;
+                if (!string.IsNullOrWhiteSpace(request.PromoCode))
+                {
+                    var discount = await _context.Discounts
+                        .FirstOrDefaultAsync(d => d.Code.ToLower() == request.PromoCode.Trim().ToLower(), cancellationToken);
+
+                    if (discount != null && discount.IsActive && utcNow >= discount.ValidFrom && utcNow <= discount.ValidTo && discount.UsageCount < discount.UsageLimit)
+                    {
+                        appliedDiscount = discount;
+                        totalPrice = PricingCalculator.ApplyDiscount(totalPrice, discount.Percentage);
+                    }
+                    else
+                    {
+                        throw new BusinessRuleException("The promo code provided is invalid, expired, or has reached its usage limit.");
+                    }
+                }
+
+                var booking = new Booking(
+                    request.UserId,
+                    request.SessionId,
+                    totalPrice,
+                    DateTime.SpecifyKind(utcNow, DateTimeKind.Utc),
+                    BookingStatus.Pending
+                )
+                {
+                    Id = bookingId,
+                    BookingSeats = bookingSeats,
+                    DiscountId = appliedDiscount?.Id
+                };
+
+                if (appliedDiscount != null)
+                {
+                    appliedDiscount.UsageCount++;
+                }
+
+                var payment = new Payment(booking.Id, string.Empty, booking.TotalPrice, PaymentStatus.Pending)
+                {
+                    Id = Guid.NewGuid()
+                };
+
+                _context.Bookings.Add(booking);
+                _context.Payments.Add(payment);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+
+                targetBooking = booking;
+                targetPayment = payment;
             }
         }
 
-        var booking = new Booking(
-            request.UserId,
-            request.SessionId,
-            totalPrice,
-            DateTime.SpecifyKind(utcNow, DateTimeKind.Utc),
-            BookingStatus.Pending
-        )
+        // Execute external Stripe payment intent creation outside the database transaction boundary to avoid holding DB connections or locks during external API calls.
+        string clientSecret = await _paymentService.CreatePaymentIntentAsync(
+            targetBooking.Id,
+            targetBooking.TotalPrice,
+            "uah",
+            idempotencyKey: targetBooking.Id.ToString(),
+            cancellationToken);
+
+        string stripePaymentIntentId = clientSecret.Split("_secret_")[0];
+
+        if (targetPayment.StripePaymentIntentId != stripePaymentIntentId)
         {
-            Id = bookingId,
-            BookingSeats = bookingSeats,
-            DiscountId = appliedDiscount?.Id
+            targetPayment.StripePaymentIntentId = stripePaymentIntentId;
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        return new BookingResponseDto
+        {
+            BookingId = targetBooking.Id,
+            TotalAmount = targetBooking.TotalPrice,
+            Status = targetBooking.Status.ToString(),
+            ClientSecret = clientSecret,
+            Message = "Booking initialized with discount and Stripe payment intent created successfully."
         };
-
-        if (_context is DbContext dbContext)
-        {
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-            _context.Bookings.Add(booking);
-
-            if (appliedDiscount != null)
-            {
-                appliedDiscount.UsageCount++;
-            }
-
-            var payment = new Payment(booking.Id, string.Empty, booking.TotalPrice, PaymentStatus.Pending)
-            {
-                Id = Guid.NewGuid()
-            };
-
-            _context.Payments.Add(payment);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            await transaction.CommitAsync(cancellationToken);
-
-            string clientSecret = await _paymentService.CreatePaymentIntentAsync(
-                booking.Id,
-                booking.TotalPrice,
-                "uah",
-                cancellationToken);
-
-            string stripePaymentIntentId = clientSecret.Split("_secret_")[0];
-
-            payment.StripePaymentIntentId = stripePaymentIntentId;
-            await _context.SaveChangesAsync(cancellationToken);
-
-            return new BookingResponseDto
-            {
-                BookingId = booking.Id,
-                TotalAmount = booking.TotalPrice,
-                Status = booking.Status.ToString(),
-                ClientSecret = clientSecret,
-                Message = "Booking initialized with discount and Stripe payment intent created successfully."
-            };
-        }
-
-        throw new InvalidOperationException("Database context is not compatible with transactions.");
     }
 }

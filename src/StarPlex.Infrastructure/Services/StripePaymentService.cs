@@ -18,7 +18,7 @@ public class StripePaymentService : IPaymentService
         StripeConfiguration.ApiKey = _settings.SecretKey;
     }
 
-    public async Task<string> CreatePaymentIntentAsync(Guid bookingId, decimal amount, string currency = "uah", CancellationToken ct = default)
+    public async Task<string> CreatePaymentIntentAsync(Guid bookingId, decimal amount, string currency = "uah", string? idempotencyKey = null, CancellationToken ct = default)
     {
         var options = new PaymentIntentCreateOptions
         {
@@ -31,8 +31,14 @@ public class StripePaymentService : IPaymentService
             }
         };
 
+        var requestOptions = new RequestOptions();
+        if (!string.IsNullOrEmpty(idempotencyKey))
+        {
+            requestOptions.IdempotencyKey = idempotencyKey;
+        }
+
         var service = new PaymentIntentService();
-        var intent = await service.CreateAsync(options, cancellationToken: ct);
+        var intent = await service.CreateAsync(options, requestOptions, cancellationToken: ct);
 
         return intent.ClientSecret;
     }
