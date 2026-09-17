@@ -10,6 +10,9 @@ namespace StarPlex.Application.IntegrationTests.Features.Bookings;
 
 public class CashierSaleConcurrencyTests : IntegrationTestBase
 {
+    public CashierSaleConcurrencyTests(DatabaseFixture fixture) : base(fixture)
+    {
+    }
     private readonly Guid _staffUserId = Guid.NewGuid();
 
     private void SetStaffUser(Guid cinemaId, bool isSuperAdmin = false)

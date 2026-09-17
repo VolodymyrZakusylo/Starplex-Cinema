@@ -11,6 +11,9 @@ namespace StarPlex.Application.IntegrationTests.Features.Bookings;
 
 public class CancelTicketCommandHandlerTests : IntegrationTestBase
 {
+    public CancelTicketCommandHandlerTests(DatabaseFixture fixture) : base(fixture)
+    {
+    }
     [Fact]
     public async Task CancelTicket_WhenLastTicketIsCancelled_ShouldRefundPaymentAndCancelBooking()
     {

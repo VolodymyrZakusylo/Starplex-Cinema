@@ -10,7 +10,7 @@ namespace StarPlex.Application.IntegrationTests.Features.Bookings;
 
 public class ScanTicketCommandHandlerTests : IntegrationTestBase
 {
-    public ScanTicketCommandHandlerTests()
+    public ScanTicketCommandHandlerTests(DatabaseFixture fixture) : base(fixture)
     {
         CurrentUserServiceMock.Setup(u => u.IsSuperAdmin).Returns(true);
     }

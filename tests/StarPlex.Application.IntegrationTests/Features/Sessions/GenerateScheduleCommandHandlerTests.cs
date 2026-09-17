@@ -12,7 +12,7 @@ namespace StarPlex.Application.IntegrationTests.Features.Sessions;
 
 public class GenerateScheduleCommandHandlerTests : IntegrationTestBase
 {
-    public GenerateScheduleCommandHandlerTests()
+    public GenerateScheduleCommandHandlerTests(DatabaseFixture fixture) : base(fixture)
     {
         CurrentUserServiceMock.Setup(u => u.IsSuperAdmin).Returns(true);
     }

@@ -21,6 +21,10 @@ namespace StarPlex.Application.IntegrationTests.Features.Authorization;
 // Real PostgreSQL and MediatR; only external services and the authenticated caller are mocked.
 public class CinemaScopeTests : IntegrationTestBase
 {
+    public CinemaScopeTests(DatabaseFixture fixture) : base(fixture)
+    {
+    }
+
     private readonly Guid _callerId = Guid.NewGuid();
 
     private sealed record Fixtures(Cinema A, Cinema B, Hall HallA, Hall HallA2, Hall HallB,

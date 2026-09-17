@@ -12,6 +12,9 @@ namespace StarPlex.Application.IntegrationTests.Features.Bookings;
 
 public class CreateBookingCommandHandlerTests : IntegrationTestBase
 {
+    public CreateBookingCommandHandlerTests(DatabaseFixture fixture) : base(fixture)
+    {
+    }
     [Fact]
     public async Task CreateBooking_ShouldCreateBookingSuccessfully()
     {
