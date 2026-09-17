@@ -1,17 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Edit2, CheckCircle, XCircle, LayoutGrid, AlertCircle, Calendar, Armchair, Ban } from 'lucide-react';
+import { Plus, Trash2, Edit2, CheckCircle, XCircle, LayoutGrid, AlertCircle, Calendar, Armchair } from 'lucide-react';
 import { hallsApi } from '@/api/halls';
 import { cinemasApi } from '@/api/cinemas';
 import { useToast } from '@/hooks/useToast';
 import type { HallDto, CinemaDto, AdminSeatDto } from '@/types';
-import { 
-    SeatTypeMap, 
-    SeatStatusMap, 
-    SeatTypeReverseMap, 
-    SeatStatusReverseMap 
-} from '@/types';
+import { SeatTypeReverseMap, SeatStatusReverseMap } from '@/types';
+
+import { HallFormModal, type HallFormPayload } from './components/HallFormModal';
+import { HallSeatsGrid } from './components/HallSeatsGrid';
+import { SeatEditPanel } from './components/SeatEditPanel';
 
 export const AdminHallsPage: React.FC = () => {
     const { user } = useAuthStore();
@@ -30,11 +29,6 @@ export const AdminHallsPage: React.FC = () => {
 
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
     const [editingHall, setEditingHall] = useState<HallDto | null>(null);
-    const [hallName, setHallName] = useState<string>('');
-    const [totalRows, setTotalRows] = useState<number>(10);
-    const [seatsPerRow, setSeatsPerRow] = useState<number>(12);
-    const [isActive, setIsActive] = useState<boolean>(true);
-    const [errorMessage, setErrorMessage] = useState<string>('');
 
     const [activeHallIdForSeats, setActiveHallIdForSeats] = useState<string | null>(null);
     const [hallSeats, setHallSeats] = useState<AdminSeatDto[]>([]);
@@ -154,55 +148,23 @@ export const AdminHallsPage: React.FC = () => {
             return;
         }
         setEditingHall(null);
-        setHallName('');
-        setTotalRows(8);
-        setSeatsPerRow(10);
-        setIsActive(true);
-        setErrorMessage('');
         setIsModalOpen(true);
     };
 
     const handleEditOpen = (hall: HallDto) => {
         setEditingHall(hall);
-        setHallName(hall.name);
-        setTotalRows(hall.totalRows);
-        setSeatsPerRow(hall.seatsPerRow);
-        setIsActive(hall.isActive);
-        setErrorMessage('');
         setIsModalOpen(true);
     };
 
-    const handleSave = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setErrorMessage('');
-
-        if (!hallName.trim()) {
-            setErrorMessage('Назва залу не може бути порожньою');
-            return;
+    const handleSaveHall = async (payload: HallFormPayload) => {
+        if (editingHall) {
+            await hallsApi.update(editingHall.id, payload);
+            showSuccess('Геометрію залу успішно переконфігуровано.');
+        } else {
+            await hallsApi.create(payload);
+            showSuccess('Новий кінозал успішно додано до системи.');
         }
-
-        const payload = {
-            id: editingHall?.id || undefined,
-            cinemaId: selectedCinemaId,
-            name: hallName.trim(),
-            totalRows: Number(totalRows),
-            seatsPerRow: Number(seatsPerRow),
-            isActive: isActive
-        };
-
-        try {
-            if (editingHall) {
-                await hallsApi.update(editingHall.id, payload);
-                showSuccess('Геометрію залу успішно переконфігуровано.');
-            } else {
-                await hallsApi.create(payload);
-                showSuccess('Новий кінозал успішно додано до системи.');
-            }
-            setIsModalOpen(false);
-            fetchHalls();
-        } catch (err: any) {
-            setErrorMessage(err.response?.data?.message || 'Сталася помилка при збереженні залу.');
-        }
+        fetchHalls();
     };
 
     const handleDelete = (id: string) => {
@@ -232,49 +194,6 @@ export const AdminHallsPage: React.FC = () => {
         } catch (err) {
             showError('Не вдалося змінити операційний статус залу.');
         }
-    };
-
-    const renderSeatRows = () => {
-        const rowsMap: Record<string, AdminSeatDto[]> = {};
-        hallSeats.forEach(seat => {
-            if (!rowsMap[seat.row]) rowsMap[seat.row] = [];
-            rowsMap[seat.row].push(seat);
-        });
-
-        return Object.entries(rowsMap)
-            .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
-            .map(([rowName, seats]) => (
-                <div key={rowName} className="flex items-center gap-3 justify-center w-full">
-                    <span className="w-5 text-[11px] font-black text-gray-500 text-center">{rowName}</span>
-                    <div className="flex items-center gap-1.5">
-                        {seats
-                            .sort((a, b) => a.number - b.number)
-                            .map(seat => {
-                                const isBeingEdited = selectedSeatForEdit?.id === seat.id;
-
-                                let seatClass = "bg-white/10 border-white/10 hover:border-[#ffbd14] text-white";
-                                if (seat.status === 1) seatClass = "bg-red-500/10 border-red-500/40 text-red-400 hover:bg-red-500/20";
-                                else if (seat.type === 1) seatClass = "bg-purple-600/20 border-purple-500/40 text-purple-400 hover:bg-purple-600/30";
-                                else if (seat.type === 2) seatClass = "bg-blue-600/20 border-blue-500/40 text-blue-400 hover:bg-blue-600/30";
-
-                                if (isBeingEdited) seatClass = "bg-[#ffbd14] border-[#ffbd14] text-black font-black ring-4 ring-[#ffbd14]/20 scale-105";
-
-                                return (
-                                    <button
-                                        key={seat.id}
-                                        type="button"
-                                        onClick={() => setSelectedSeatForEdit(seat)}
-                                        className={`w-7 h-7 rounded-md border text-[9px] font-black flex items-center justify-center transition-all cursor-pointer ${seatClass}`}
-                                        title={`Ряд ${seat.row}, Місце ${seat.number} (${SeatTypeMap[seat.type]})`}
-                                    >
-                                        {seat.status === 1 ? <Ban className="w-2.5 h-2.5" /> : seat.number}
-                                    </button>
-                                );
-                            })}
-                    </div>
-                    <span className="w-5 text-[11px] font-black text-gray-500 text-center">{rowName}</span>
-                </div>
-            ));
     };
 
     return (
@@ -409,7 +328,7 @@ export const AdminHallsPage: React.FC = () => {
                         <div className="bg-[#1a1c26] border border-white/5 rounded-2xl p-8 shadow-2xl animate-fadeIn">
                             <div className="w-full flex items-center justify-between border-b border-white/5 pb-4 mb-8">
                                 <div>
-                                    <h3 className="text-lg font-black tracking-tight">🛠️ Конфігуратор технічних параметрів та типів крісел</h3>
+                                    <h3 className="text-lg font-black tracking-tight">Конфігуратор технічних параметрів та типів крісел</h3>
                                     <p className="text-xs text-gray-400 mt-0.5">Оберіть будь-яке місце на схемі зали для зміни його категорії чи виведення з експлуатації</p>
                                 </div>
                                 <button
@@ -428,92 +347,18 @@ export const AdminHallsPage: React.FC = () => {
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-                                    <div className="lg:col-span-3 flex flex-col items-center overflow-x-auto py-4 bg-[#111219]/40 border border-white/5 rounded-2xl p-6">
-                                        <div className="w-full max-w-md bg-gradient-to-b from-[#ffbd14]/10 to-transparent h-3 rounded-t-full mb-12 relative flex items-center justify-center border-t border-[#ffbd14]/20">
-                                            <span className="text-[9px] text-[#ffbd14]/40 font-bold tracking-[0.3em] uppercase absolute -bottom-5">Екран зали</span>
-                                        </div>
-                                        <div className="flex flex-col gap-2.5 min-w-[500px]">
-                                            {renderSeatRows()}
-                                        </div>
-                                        <div className="flex flex-wrap justify-center gap-6 mt-10 border-t border-white/5 pt-5 w-full text-[11px] text-gray-400">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-3 h-3 bg-white/10 border border-white/10 rounded"></div>
-                                                <span>Standard</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-3 h-3 bg-purple-600/20 border border-purple-500/30 rounded"></div>
-                                                <span>VIP (+50%)</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-3 h-3 bg-blue-600/20 border border-blue-500/30 rounded"></div>
-                                                <span>Disabled</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-3 h-3 bg-red-500/10 border border-red-500/30 flex items-center justify-center rounded text-red-400"><Ban className="w-2 h-2" /></div>
-                                                <span>Inactive (Зламане)</span>
-                                            </div>
-                                        </div>
+                                    <div className="lg:col-span-3">
+                                        <HallSeatsGrid
+                                            hallSeats={hallSeats}
+                                            selectedSeatForEdit={selectedSeatForEdit}
+                                            onSelectSeat={setSelectedSeatForEdit}
+                                        />
                                     </div>
 
-                                    <div className="lg:col-span-1 bg-[#111219] border border-white/5 p-5 rounded-2xl flex flex-col gap-5 sticky top-6">
-                                        {selectedSeatForEdit ? (
-                                            <>
-                                                <div>
-                                                    <span className="text-[10px] text-[#ffbd14] font-black uppercase tracking-wider block">Обране місце</span>
-                                                    <h4 className="text-xl font-black text-white mt-0.5">Ряд {selectedSeatForEdit.row}, Крісло {selectedSeatForEdit.number}</h4>
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Категорія (Тип)</label>
-                                                    <div className="grid grid-cols-1 gap-2">
-                                                        {(['Standard', 'VIP', 'Disabled'] as const).map(t => (
-                                                            <button
-                                                                key={t}
-                                                                type="button"
-                                                                onClick={() => handleUpdateSeatProperties(selectedSeatForEdit.id, t, SeatStatusMap[selectedSeatForEdit.status])}
-                                                                className={`w-full py-2.5 px-4 text-left text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-                                                                    SeatTypeMap[selectedSeatForEdit.type] === t
-                                                                        ? 'bg-purple-600 border-purple-500 text-white shadow-lg'
-                                                                        : 'bg-[#1a1c26] border-white/5 text-gray-400 hover:text-white hover:border-white/10'
-                                                                }`}
-                                                            >
-                                                                {t === 'Standard' && '🎟️ Standard (Звичайне)'}
-                                                                {t === 'VIP' && '👑 VIP (Комфорт)'}
-                                                                {t === 'Disabled' && '♿ Disabled (Інклюзивне)'}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-2 border-t border-white/5 pt-4">
-                                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Технічний Стан</label>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {(['Active', 'Inactive'] as const).map(s => (
-                                                            <button
-                                                                key={s}
-                                                                type="button"
-                                                                onClick={() => handleUpdateSeatProperties(selectedSeatForEdit.id, SeatTypeMap[selectedSeatForEdit.type], s)}
-                                                                className={`get-btn py-2 px-3 text-center text-xs font-black rounded-xl border transition-all uppercase tracking-wider cursor-pointer ${
-                                                                    SeatStatusMap[selectedSeatForEdit.status] === s
-                                                                        ? s === 'Active'
-                                                                            ? 'bg-emerald-600 border-emerald-500 text-white'
-                                                                            : 'bg-red-600 border-red-500 text-white'
-                                                                        : 'bg-[#1a1c26] border-white/5 text-gray-400 hover:text-white'
-                                                                }`}
-                                                            >
-                                                                {s === 'Active' ? '🟢 Active' : '🚫 Broken'}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="text-center py-12 border border-dashed border-white/5 rounded-xl">
-                                                <Armchair className="w-8 h-8 text-gray-600 mx-auto mb-2 opacity-50" />
-                                                <p className="text-xs text-gray-400 italic px-4">Клацніть на будь-яке крісло ліворуч для налаштування</p>
-                                            </div>
-                                        )}
-                                    </div>
+                                    <SeatEditPanel
+                                        selectedSeat={selectedSeatForEdit}
+                                        onUpdateSeatProperties={handleUpdateSeatProperties}
+                                    />
                                 </div>
                             )}
                         </div>
@@ -521,56 +366,13 @@ export const AdminHallsPage: React.FC = () => {
                 </div>
             )}
 
-            {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                    <div className="w-full max-w-md bg-[#1a1c26] border border-white/10 rounded-2xl p-6 relative">
-                        <h2 className="text-xl font-black tracking-tight mb-4 text-white">
-                            {editingHall ? '📝 Редагувати залу' : '✨ Створити новий зал'}
-                        </h2>
-                        {errorMessage && (
-                            <p className="text-xs text-red-400 mb-3 bg-red-500/10 border border-red-500/10 p-2 rounded-lg font-bold">{errorMessage}</p>
-                        )}
-                        <form onSubmit={handleSave} className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Назва залу</label>
-                                <input
-                                    type="text"
-                                    value={hallName}
-                                    onChange={(e) => setHallName(e.target.value)}
-                                    placeholder="Наприклад: Синій зал, IMAX"
-                                    className="w-full bg-[#111219] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#ffbd14]"
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Всього рядів</label>
-                                    <input
-                                        type="number"
-                                        value={totalRows}
-                                        onChange={(e) => setTotalRows(Number(e.target.value))}
-                                        disabled={!!editingHall}
-                                        className="w-full bg-[#111219] border border-white/10 rounded-xl px-4 py-3 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Місць у ряді</label>
-                                    <input
-                                        type="number"
-                                        value={seatsPerRow}
-                                        onChange={(e) => setSeatsPerRow(Number(e.target.value))}
-                                        disabled={!!editingHall}
-                                        className="w-full bg-[#111219] border border-white/10 rounded-xl px-4 py-3 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="bg-white/5 text-white font-bold text-xs px-4 py-3 rounded-xl border-none cursor-pointer">Скасувати</button>
-                                <button type="submit" className="bg-[#ffbd14] text-black font-black text-xs px-5 py-3 rounded-xl uppercase tracking-wider border-none cursor-pointer">Зберегти</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            <HallFormModal
+                isOpen={isModalOpen}
+                editingHall={editingHall}
+                selectedCinemaId={selectedCinemaId}
+                onClose={() => setIsModalOpen(false)}
+                onSave={handleSaveHall}
+            />
         </div>
     );
 };

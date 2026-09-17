@@ -24,10 +24,6 @@ export const sessionsApi = {
     await api.delete(`/Sessions/${id}`);
   },
 
-  move: async (id: string, newStartTime: string): Promise<void> => {
-    await api.put('/Sessions/move', { id, newStartTime });
-  },
-
   generateSchedule: async (payload: any): Promise<{ success: boolean; count: number; message: string }> => {
     const response = await api.post<{ success: boolean; count: number; message: string }>('/Sessions/generate-schedule', payload);
     return response.data;

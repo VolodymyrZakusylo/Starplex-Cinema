@@ -1,19 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Shield, Search, SlidersHorizontal, Edit2, UserCheck, MapPin, ChevronLeft, ChevronRight, X, Check } from 'lucide-react';
-import { usersApi } from '@/api/users';
+import { Shield, Search, SlidersHorizontal, Edit2, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
+import { usersApi, type GetStaffParams } from '@/api/users';
 import { cinemasApi } from '@/api/cinemas';
 import type { UserStaffDto } from '@/types/admin';
 import type { CinemaDto } from '@/types/cinemas';
 import { useToast } from '@/hooks/useToast';
-
-export const UserRole = {
-    SuperAdmin: 0,
-    CinemaManager: 1,
-    Cashier: 2,
-    Customer: 3
-} as const;
-
-export type UserRoleType = typeof UserRole[keyof typeof UserRole];
+import { StaffRoleModal } from './components/StaffRoleModal';
 
 const RoleLabels: Record<string, string> = {
     'SuperAdmin': 'Глобальний Адмін',
@@ -27,7 +19,7 @@ export const AdminStaffPage: React.FC = () => {
     const [users, setUsers] = useState<UserStaffDto[]>([]);
     const [cinemas, setCinemas] = useState<CinemaDto[]>([]);
     const [totalCount, setTotalCount] = useState<number>(0);
-    
+
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [roleFilter, setRoleFilter] = useState<string>('');
     const [cinemaFilter, setCinemaFilter] = useState<string>('');
@@ -38,9 +30,6 @@ export const AdminStaffPage: React.FC = () => {
 
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
     const [selectedUser, setSelectedUser] = useState<UserStaffDto | null>(null);
-    const [selectedRole, setSelectedRole] = useState<UserRoleType>(UserRole.Customer);
-    const [selectedCinemaId, setSelectedCinemaId] = useState<string>('');
-    const [modalError, setModalError] = useState<string>('');
 
     const fetchCinemas = async () => {
         try {
@@ -54,7 +43,7 @@ export const AdminStaffPage: React.FC = () => {
     const fetchUsers = async () => {
         setIsLoading(true);
         try {
-            const params: any = {
+            const params: GetStaffParams = {
                 page: currentPage,
                 pageSize: pageSize
             };
@@ -63,7 +52,7 @@ export const AdminStaffPage: React.FC = () => {
             if (cinemaFilter) params.cinemaIdFilter = cinemaFilter;
 
             const response = await usersApi.getStaff(params);
-            setUsers((response as any).users || response.items || []);
+            setUsers(response.users);
             setTotalCount(response.totalCount);
         } catch (err: any) {
             showError(err.response?.data?.message || 'Не вдалося завантажити реєстр користувачів.');
@@ -88,35 +77,13 @@ export const AdminStaffPage: React.FC = () => {
 
     const handleOpenEditModal = (user: UserStaffDto) => {
         setSelectedUser(user);
-        
-        const currentRoleName = (user as any).currentRole || (user.roles && user.roles[0]);
-        const currentRoleEnum = (UserRole as any)[currentRoleName] ?? UserRole.Customer;
-        setSelectedRole(currentRoleEnum as UserRoleType);
-        setSelectedCinemaId(user.cinemaId || '');
-        setModalError('');
         setIsModalOpen(true);
     };
 
-    const handleSaveRoleUpdate = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedUser) return;
-        setModalError('');
-
-        const needCinema = selectedRole === UserRole.CinemaManager || selectedRole === UserRole.Cashier;
-        if (needCinema && !selectedCinemaId) {
-            setModalError('Необхідно обрати конкретну філію кінотеатру для цього співробітника.');
-            return;
-        }
-
-        try {
-            const roleName = Object.keys(UserRole).find(key => (UserRole as any)[key] === selectedRole) || 'Customer';
-            await usersApi.updateRole(selectedUser.id, roleName, needCinema ? selectedCinemaId : null);
-            showSuccess('Права та рівень доступу користувача успішно змінено.');
-            setIsModalOpen(false);
-            fetchUsers();
-        } catch (err: any) {
-            setModalError(err.response?.data?.message || 'Помилка при оновленні прав доступу.');
-        }
+    const handleSaveRoleUpdate = async (userId: string, newRoleName: string, cinemaId: string | null) => {
+        await usersApi.updateRole(userId, newRoleName, cinemaId);
+        showSuccess('Права та рівень доступу користувача успішно змінено.');
+        fetchUsers();
     };
 
     const totalPages = Math.ceil(totalCount / pageSize);
@@ -144,7 +111,7 @@ export const AdminStaffPage: React.FC = () => {
                         />
                         <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
                     </div>
-                    
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:w-[450px]">
                         <select
                             value={roleFilter}
@@ -199,7 +166,7 @@ export const AdminStaffPage: React.FC = () => {
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 {users.map((user) => {
-                                    const currentRoleName = (user as any).currentRole || (user.roles && user.roles[0]) || 'Customer';
+                                    const currentRoleName = user.currentRole || 'Customer';
                                     return (
                                         <tr key={user.id} className="hover:bg-white/[0.02] transition-colors">
                                             <td className="p-4 sm:p-5 font-bold text-white whitespace-nowrap">
@@ -226,7 +193,7 @@ export const AdminStaffPage: React.FC = () => {
                                                 </span>
                                             </td>
                                             <td className="p-4 sm:p-5 text-right">
-                                                <button 
+                                                <button
                                                     type="button"
                                                     onClick={() => handleOpenEditModal(user)}
                                                     className="p-2.5 bg-[#111219] hover:bg-[#ffbd14] rounded-xl text-gray-400 hover:text-black transition-all inline-flex items-center gap-2 border border-white/5 hover:border-transparent font-bold text-[11px] uppercase tracking-wider cursor-pointer"
@@ -267,79 +234,13 @@ export const AdminStaffPage: React.FC = () => {
                 </div>
             )}
 
-            {isModalOpen && selectedUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-                    <div className="w-full max-w-md bg-[#1a1c26] border border-white/10 rounded-2xl shadow-2xl p-6 relative flex flex-col">
-                        <button 
-                            type="button"
-                            onClick={() => setIsModalOpen(false)}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 bg-transparent border-none cursor-pointer"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-
-                        <h2 className="text-xl font-black tracking-tight mb-1 text-white flex items-center gap-2">
-                            <UserCheck className="text-[#ffbd14] w-5 h-5" /> Керування доступом
-                        </h2>
-                        <p className="text-xs text-gray-400 mb-4 font-mono truncate">{selectedUser.email}</p>
-
-                        {modalError && (
-                            <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
-                                <X className="w-4 h-4 flex-shrink-0 text-red-400" />
-                                <div>{modalError}</div>
-                            </div>
-                        )}
-
-                        <form onSubmit={handleSaveRoleUpdate} className="space-y-5 text-xs">
-                            <div>
-                                <label className="block text-gray-400 font-bold uppercase tracking-wider mb-2">Оберіть системну роль</label>
-                                <select
-                                    value={selectedRole}
-                                    onChange={(e) => setSelectedRole(Number(e.target.value) as UserRoleType)}
-                                    className="w-full bg-[#111219] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#ffbd14] cursor-pointer"
-                                >
-                                    <option value={UserRole.Customer}>Клієнт (Customer)</option>
-                                    <option value={UserRole.Cashier}>Касир (Cashier)</option>
-                                    <option value={UserRole.CinemaManager}>Менеджер філії (CinemaManager)</option>
-                                    <option value={UserRole.SuperAdmin}>Глобальний Адмін (SuperAdmin)</option>
-                                </select>
-                            </div>
-
-                            {(selectedRole === UserRole.CinemaManager || selectedRole === UserRole.Cashier) && (
-                                <div className="animate-fadeIn">
-                                    <label className="block text-gray-400 font-bold uppercase tracking-wider mb-2">Локація (Кінотеатр)</label>
-                                    <select
-                                        value={selectedCinemaId}
-                                        onChange={(e) => setSelectedCinemaId(e.target.value)}
-                                        className="w-full bg-[#111219] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#ffbd14] cursor-pointer"
-                                    >
-                                        <option value="">Оберіть зі списку філій...</option>
-                                        {cinemas.map(c => (
-                                            <option key={c.id} value={c.id}>{c.city} — {c.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-
-                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
-                                <button 
-                                    type="button" 
-                                    onClick={() => setIsModalOpen(false)} 
-                                    className="bg-white/5 hover:bg-white/10 text-white font-bold px-4 py-3 rounded-xl transition-all border-none cursor-pointer"
-                                >
-                                    Скасувати
-                                </button>
-                                <button 
-                                    type="submit" 
-                                    className="bg-[#ffbd14] hover:bg-[#e0a40f] text-black font-black px-5 py-3 rounded-xl uppercase tracking-wider shadow-lg flex items-center gap-1.5 border-none cursor-pointer"
-                                >
-                                    <Check className="w-4 h-4 stroke-[3]" /> Зберегти зміни
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            <StaffRoleModal
+                isOpen={isModalOpen}
+                user={selectedUser}
+                cinemas={cinemas}
+                onClose={() => setIsModalOpen(false)}
+                onSave={handleSaveRoleUpdate}
+            />
         </div>
     );
 };
