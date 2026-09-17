@@ -69,8 +69,10 @@ using (var scope = app.Services.CreateScope())
     {
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var configuration = services.GetRequiredService<IConfiguration>();
+        var logger = services.GetRequiredService<ILogger<Program>>();
 
-        await RoleSeeder.SeedDataAsync(roleManager, userManager);
+        await RoleSeeder.SeedDataAsync(roleManager, userManager, configuration, logger);
     }
     catch (Exception ex)
     {

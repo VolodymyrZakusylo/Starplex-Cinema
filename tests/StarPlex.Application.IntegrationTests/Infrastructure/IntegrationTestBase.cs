@@ -1,8 +1,10 @@
 using MediatR;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using StarPlex.Application.Common.Interfaces;
+using StarPlex.Infrastructure.Identity;
 using StarPlex.Infrastructure.Persistence;
 using Xunit;
 
@@ -48,6 +50,17 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 
         services.AddLogging();
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(IApplicationDbContext).Assembly));
+
+        services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
+        {
+            options.Password.RequiredLength = 8;
+            options.Password.RequireDigit = true;
+            options.Password.RequireUppercase = false;
+            options.Password.RequireNonAlphanumeric = false;
+            options.User.RequireUniqueEmail = true;
+        })
+        .AddEntityFrameworkStores<ApplicationDbContext>()
+        .AddDefaultTokenProviders();
 
         // Register Mocked Dependencies
         services.AddScoped(_ => PaymentServiceMock.Object);
