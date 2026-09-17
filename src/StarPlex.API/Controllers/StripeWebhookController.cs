@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using StarPlex.Application.Common.Models;
-using StarPlex.Application.Features.Bookings.Commands.ConfirmBooking;
+using StarPlex.Application.Features.Bookings.Commands.ConfirmBookingFromWebhook;
 using Stripe;
 
 namespace StarPlex.API.Controllers;
@@ -47,7 +47,14 @@ public class StripeWebhookController : ControllerBase
                 {
                     if (Guid.TryParse(bookingIdStr, out var bookingId))
                     {
-                        await _mediator.Send(new ConfirmBookingCommand { BookingId = bookingId });
+                        decimal amount = paymentIntent.Amount / 100m;
+                        await _mediator.Send(new ConfirmBookingFromWebhookCommand
+                        {
+                            BookingId = bookingId,
+                            PaymentIntentId = paymentIntent.Id ?? string.Empty,
+                            Amount = amount,
+                            Currency = paymentIntent.Currency ?? string.Empty
+                        });
                     }
                 }
             }

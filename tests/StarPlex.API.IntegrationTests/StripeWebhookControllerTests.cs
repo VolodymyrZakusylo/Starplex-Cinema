@@ -7,12 +7,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Logging;
 using Moq;
 using StarPlex.API.Controllers;
-using StarPlex.Application.Common.Models;
-using StarPlex.Application.Features.Bookings.Commands.ConfirmBooking;
+using StarPlex.Application.Features.Bookings.Commands.ConfirmBookingFromWebhook;
 using Xunit;
 
 namespace StarPlex.API.IntegrationTests;
@@ -27,7 +24,7 @@ public class StripeWebhookControllerTests : IClassFixture<WebApplicationFactory<
     {
         _mediatorMock = new Mock<IMediator>();
 
-        _mediatorMock.Setup(m => m.Send(It.IsAny<ConfirmBookingCommand>(), It.IsAny<CancellationToken>()))
+        _mediatorMock.Setup(m => m.Send(It.IsAny<ConfirmBookingFromWebhookCommand>(), It.IsAny<CancellationToken>()))
                      .ReturnsAsync(true);
 
         _factory = factory.WithWebHostBuilder(builder =>
@@ -64,7 +61,7 @@ public class StripeWebhookControllerTests : IClassFixture<WebApplicationFactory<
     }
 
     [Fact]
-    public async Task HandleWebhook_WhenSignatureIsValidAndEventIsPaymentSucceeded_ShouldSendConfirmBookingCommand()
+    public async Task HandleWebhook_WhenSignatureIsValidAndEventIsPaymentSucceeded_ShouldSendConfirmBookingFromWebhookCommand()
     {
         var bookingId = Guid.NewGuid();
         var payload = $$"""
@@ -76,6 +73,8 @@ public class StripeWebhookControllerTests : IClassFixture<WebApplicationFactory<
             "object": {
               "id": "pi_test",
               "object": "payment_intent",
+              "amount": 15000,
+              "currency": "uah",
               "metadata": {
                 "BookingId": "{{bookingId}}"
               }
@@ -99,7 +98,7 @@ public class StripeWebhookControllerTests : IClassFixture<WebApplicationFactory<
         response.StatusCode.Should().Be(HttpStatusCode.OK, responseContent);
 
         _mediatorMock.Verify(m => m.Send(
-            It.Is<ConfirmBookingCommand>(c => c.BookingId == bookingId),
+            It.Is<ConfirmBookingFromWebhookCommand>(c => c.BookingId == bookingId && c.PaymentIntentId == "pi_test" && c.Amount == 150m && c.Currency == "uah"),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -120,7 +119,7 @@ public class StripeWebhookControllerTests : IClassFixture<WebApplicationFactory<
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
-        _mediatorMock.Verify(m => m.Send(It.IsAny<ConfirmBookingCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mediatorMock.Verify(m => m.Send(It.IsAny<ConfirmBookingFromWebhookCommand>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -154,7 +153,6 @@ public class StripeWebhookControllerTests : IClassFixture<WebApplicationFactory<
         var responseContent = await response.Content.ReadAsStringAsync();
         response.StatusCode.Should().Be(HttpStatusCode.OK, responseContent);
 
-        _mediatorMock.Verify(m => m.Send(It.IsAny<ConfirmBookingCommand>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mediatorMock.Verify(m => m.Send(It.IsAny<ConfirmBookingFromWebhookCommand>(), It.IsAny<CancellationToken>()), Times.Never);
     }
-
 }

@@ -14,10 +14,12 @@ public class ConfirmBookingCommandHandlerTests : IntegrationTestBase
     public ConfirmBookingCommandHandlerTests(DatabaseFixture fixture) : base(fixture)
     {
     }
+
     [Fact]
     public async Task ConfirmBooking_WhenBookingIsValid_ShouldConfirmBookingAndGenerateTickets()
     {
         var userId = Guid.NewGuid();
+        CurrentUserServiceMock.Setup(u => u.UserId).Returns(userId);
 
         var cinema = new Cinema("StarPlex", "Main St 1", "Kyiv");
         DbContext.Cinemas.Add(cinema);
@@ -49,6 +51,10 @@ public class ConfirmBookingCommandHandlerTests : IntegrationTestBase
         var temporaryLock = new SelectedSeat(session.Id, seat.Id, userId, DateTime.UtcNow.AddMinutes(10));
         DbContext.SelectedSeats.Add(temporaryLock);
         await DbContext.SaveChangesAsync(CancellationToken.None);
+
+        PaymentServiceMock
+            .Setup(p => p.VerifyPaymentIntentAsync("pi_test", booking.Id, 150m, "uah", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         var request = new ConfirmBookingCommand
         {
@@ -91,6 +97,8 @@ public class ConfirmBookingCommandHandlerTests : IntegrationTestBase
     [Fact]
     public async Task ConfirmBooking_WhenBookingDoesNotExist_ShouldReturnFalse()
     {
+        CurrentUserServiceMock.Setup(u => u.UserId).Returns(Guid.NewGuid());
+
         var request = new ConfirmBookingCommand
         {
             BookingId = Guid.NewGuid()
@@ -108,6 +116,7 @@ public class ConfirmBookingCommandHandlerTests : IntegrationTestBase
     public async Task ConfirmBooking_WhenBookingIsAlreadyConfirmed_ShouldReturnTrueAndMakeNoChanges()
     {
         var userId = Guid.NewGuid();
+        CurrentUserServiceMock.Setup(u => u.UserId).Returns(userId);
 
         var cinema = new Cinema("StarPlex", "Main St 1", "Kyiv");
         DbContext.Cinemas.Add(cinema);
@@ -154,6 +163,13 @@ public class ConfirmBookingCommandHandlerTests : IntegrationTestBase
         var result = await Mediator.Send(request);
 
         result.Should().BeTrue();
+
+        PaymentServiceMock.Verify(p => p.VerifyPaymentIntentAsync(
+            It.IsAny<string>(),
+            It.IsAny<Guid>(),
+            It.IsAny<decimal>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
 
         var dbTickets = await DbContext.Tickets.AsNoTracking().Where(t => t.BookingSeatId == bookingSeat.Id).ToListAsync();
         dbTickets.Should().HaveCount(1);

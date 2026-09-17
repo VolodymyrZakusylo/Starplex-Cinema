@@ -43,6 +43,36 @@ public class StripePaymentService : IPaymentService
         return intent.ClientSecret;
     }
 
+    public async Task<bool> VerifyPaymentIntentAsync(string paymentIntentId, Guid bookingId, decimal expectedAmount, string currency = "uah", CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(paymentIntentId)) return false;
+
+        try
+        {
+            var service = new PaymentIntentService();
+            var intent = await service.GetAsync(paymentIntentId, cancellationToken: ct);
+
+            if (intent == null) return false;
+            if (intent.Status != "succeeded") return false;
+            if (!intent.Metadata.TryGetValue("BookingId", out var metadataBookingId) || !Guid.TryParse(metadataBookingId, out var parsedBookingId) || parsedBookingId != bookingId) return false;
+
+            long expectedAmountCents = (long)(expectedAmount * 100);
+            if (intent.Amount != expectedAmountCents) return false;
+            if (!string.Equals(intent.Currency, currency, StringComparison.OrdinalIgnoreCase)) return false;
+
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to verify Stripe PaymentIntent {PaymentIntentId} for booking {BookingId}", paymentIntentId, bookingId);
+            return false;
+        }
+    }
+
     public async Task<bool> RefundPaymentAsync(string paymentIntentId, decimal amount, string currency = "uah", CancellationToken ct = default)
     {
         try
