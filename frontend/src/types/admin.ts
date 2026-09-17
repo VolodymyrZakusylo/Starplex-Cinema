@@ -32,9 +32,14 @@ export interface UserStaffDto {
   email: string;
   firstName: string;
   lastName: string;
-  roles: string[];
+  currentRole: string;
   cinemaId?: string | null;
   cinemaName?: string | null;
+}
+
+export interface PagedUserStaffResponse {
+  users: UserStaffDto[];
+  totalCount: number;
 }
 
 export interface AuditLogDto {

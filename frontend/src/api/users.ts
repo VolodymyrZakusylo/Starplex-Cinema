@@ -1,9 +1,17 @@
 import api from './axios';
-import type { UserStaffDto, PagedResponse } from '@/types/admin';
+import type { PagedUserStaffResponse } from '@/types/admin';
+
+export interface GetStaffParams {
+  searchTerm?: string;
+  roleFilter?: string;
+  cinemaIdFilter?: string;
+  page?: number;
+  pageSize?: number;
+}
 
 export const usersApi = {
-  getStaff: async (params?: Record<string, any>): Promise<PagedResponse<UserStaffDto>> => {
-    const response = await api.get<PagedResponse<UserStaffDto>>('/Users/staff', { params });
+  getStaff: async (params?: GetStaffParams): Promise<PagedUserStaffResponse> => {
+    const response = await api.get<PagedUserStaffResponse>('/Users/staff', { params });
     return response.data;
   },
 
