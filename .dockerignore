@@ -1,0 +1,20 @@
+# Build & IDE noise
+**/bin/
+**/obj/
+.git/
+.gitignore
+.vs/
+.vscode/
+.idea/
+*.user
+
+# Frontend artifacts
+frontend/
+
+# Tests (not needed in production API image build)
+tests/
+
+# Temporary / OS files
+*.log
+.DS_Store
+Thumbs.db
