@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Entities;
 using StarPlex.Infrastructure.Identity;
@@ -44,6 +45,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
 
         return await base.SaveChangesAsync(cancellationToken);
     }
+
+    public Task<bool> HasUsersAssignedToCinemaAsync(Guid cinemaId, CancellationToken cancellationToken)
+        => Users.AnyAsync(u => u.CinemaId == cinemaId, cancellationToken);
+
+    public bool IsForeignKeyViolation(DbUpdateException exception, string constraintName)
+        => exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation } postgres
+           && postgres.ConstraintName == constraintName;
 
     private void GenerateAuditLogs()
     {

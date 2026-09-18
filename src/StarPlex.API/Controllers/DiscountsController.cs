@@ -82,7 +82,7 @@ public class DiscountsController : ControllerBase
     [Authorize(Roles = "SuperAdmin")]
     public async Task<IActionResult> DeletePromoCode(Guid id)
     {
-        await _mediator.Send(new DeletePromoCodeCommand(id));
-        return NoContent();
+        var result = await _mediator.Send(new DeletePromoCodeCommand(id));
+        return Ok(result);
     }
 }

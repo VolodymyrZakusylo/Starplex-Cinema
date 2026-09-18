@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getApiErrorMessage } from '@/api/errors';
 import { useAuthStore } from '@/store/authStore';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Edit2, CheckCircle, XCircle, LayoutGrid, AlertCircle, Calendar, Armchair } from 'lucide-react';
@@ -174,7 +175,7 @@ export const AdminHallsPage: React.FC = () => {
                 showSuccess('Кінозал повністю видалено з системи.');
                 fetchHalls();
             } catch (err: any) {
-                showError(err.response?.data?.message || 'Не вдалося видалити зал. Можливо, до нього прив’язані активні сеанси.');
+                showError(getApiErrorMessage(err, 'Не вдалося видалити зал. Зал з історією сеансів можна деактивувати.'));
             }
         });
     };

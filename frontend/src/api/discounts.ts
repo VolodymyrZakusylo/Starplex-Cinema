@@ -11,8 +11,9 @@ export const discountsApi = {
     await api.post('/Discounts/create', payload);
   },
 
-  delete: async (id: string): Promise<void> => {
-    await api.delete(`/Discounts/${id}`);
+  delete: async (id: string): Promise<{ outcome: 'Deleted' | 'Deactivated' }> => {
+    const response = await api.delete<{ outcome: 'Deleted' | 'Deactivated' }>(`/Discounts/${id}`);
+    return response.data;
   },
 
   validate: async (code: string): Promise<{ percentage: number }> => {

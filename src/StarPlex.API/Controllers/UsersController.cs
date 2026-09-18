@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Common.Models;
@@ -48,7 +49,7 @@ public class UsersController : ControllerBase
         [FromRoute] Guid id,
         [FromBody] UpdateRoleRequest request)
     {
-        var success = await _identityService.UpdateUserRoleAndCinemaAsync(id, request.NewRole, request.CinemaId);
+        var success = await _identityService.UpdateUserRoleAndCinemaAsync(id, request.NewRole!.Value, request.CinemaId);
 
             if (!success)
             {
@@ -61,7 +62,9 @@ public class UsersController : ControllerBase
 
 public class UpdateRoleRequest
 {
-    public UserRole NewRole { get; set; }
+    [Required]
+    [EnumDataType(typeof(UserRole))]
+    public UserRole? NewRole { get; set; }
     public Guid? CinemaId { get; set; }
 }
 

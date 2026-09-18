@@ -38,6 +38,9 @@ public class CreateSessionCommandHandler : IRequestHandler<CreateSessionCommand,
             throw new ForbiddenException("You do not have permission to manage this cinema.");
         }
 
+        if (!hall.IsActive)
+            throw new BusinessRuleException("New sessions cannot be created in an inactive hall.");
+
         var movie = await _context.Movies
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.Id == request.MovieId, cancellationToken);

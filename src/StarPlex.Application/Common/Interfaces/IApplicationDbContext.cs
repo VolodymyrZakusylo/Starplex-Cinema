@@ -23,4 +23,6 @@ public interface IApplicationDbContext
     DatabaseFacade Database { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
+    Task<bool> HasUsersAssignedToCinemaAsync(Guid cinemaId, CancellationToken cancellationToken);
+    bool IsForeignKeyViolation(DbUpdateException exception, string constraintName);
 }

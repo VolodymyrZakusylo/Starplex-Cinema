@@ -238,48 +238,59 @@ public class IdentityService : IIdentityService
 
     public async Task<bool> UpdateUserRoleAndCinemaAsync(Guid userId, UserRole newRole, Guid? cinemaId)
     {
-        var user = await _userManager.FindByIdAsync(userId.ToString());
-        if (user == null) return false;
+        if (!Enum.IsDefined(newRole))
+            throw new BusinessRuleException("The requested user role is invalid.");
 
-        string roleName = newRole.ToString();
+        var requiresCinema = newRole is UserRole.Cashier or UserRole.CinemaManager;
+        if (requiresCinema && !cinemaId.HasValue)
+            throw new BusinessRuleException("A cinema must be specified for cinema staff.");
 
-        if (newRole == UserRole.SuperAdmin || newRole == UserRole.Customer)
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            user.CinemaId = null;
-        }
-        else
-        {
-            if (!cinemaId.HasValue)
+            if (_context.Database.ProviderName?.Contains("Npgsql") == true)
+                await _context.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Users\" WHERE \"Id\" = {userId} FOR UPDATE");
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return false;
+
+            if (requiresCinema)
             {
-                throw new BusinessRuleException("A cinema must be specified for cinema staff.");
+                if (_context.Database.ProviderName?.Contains("Npgsql") == true)
+                    await _context.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Cinemas\" WHERE \"Id\" = {cinemaId!.Value} FOR UPDATE");
+                if (!await _context.Cinemas.AnyAsync(c => c.Id == cinemaId))
+                    throw new BusinessRuleException("The selected cinema does not exist.");
             }
-            user.CinemaId = cinemaId.Value;
-        }
 
-        var updateResult = await _userManager.UpdateAsync(user);
-        if (!updateResult.Succeeded)
-        {
-            _logger.LogWarning("Failed to update user {UserId} properties during role change", userId);
-            return false;
-        }
+            var roleName = newRole.ToString();
+            if (!await _roleManager.RoleExistsAsync(roleName))
+                throw new BusinessRuleException("The requested role is not configured.");
 
-        var currentRoles = await _userManager.GetRolesAsync(user);
+            var currentRoles = await _userManager.GetRolesAsync(user);
+            if (currentRoles.Any())
+                EnsureRoleUpdateSucceeded(await _userManager.RemoveFromRolesAsync(user, currentRoles), userId);
 
-        if (currentRoles.Any())
-        {
-            await _userManager.RemoveFromRolesAsync(user, currentRoles);
-        }
-
-        var roleResult = await _userManager.AddToRoleAsync(user, roleName);
-        if (roleResult.Succeeded)
-        {
+            EnsureRoleUpdateSucceeded(await _userManager.AddToRoleAsync(user, roleName), userId);
+            user.CinemaId = requiresCinema ? cinemaId : null;
+            EnsureRoleUpdateSucceeded(await _userManager.UpdateAsync(user), userId);
+            await transaction.CommitAsync();
             _logger.LogInformation("Successfully updated user {UserId} to role {RoleName}", userId, roleName);
+            return true;
         }
-        else
+        catch
         {
-            _logger.LogWarning("Failed to add user {UserId} to role {RoleName}", userId, roleName);
+            await transaction.RollbackAsync();
+            _context.ChangeTracker.Clear();
+            throw;
         }
-        return roleResult.Succeeded;
+    }
+
+    private void EnsureRoleUpdateSucceeded(IdentityResult result, Guid userId)
+    {
+        if (result.Succeeded) return;
+        var details = string.Join("; ", result.Errors.Select(e => e.Description));
+        _logger.LogWarning("Role update failed for user {UserId}: {Errors}", userId, details);
+        throw new BusinessRuleException($"Unable to update user role: {details}");
     }
 
     private async Task<AuthResponse> GenerateAuthResponseAsync(ApplicationUser user, CancellationToken cancellationToken = default)

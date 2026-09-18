@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getApiErrorMessage } from '@/api/errors';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Edit2, Trash2, MapPin, Film as CinemaIcon, AlertCircle, X, Check, Globe } from 'lucide-react';
 import { cinemasApi } from '@/api/cinemas';
@@ -65,7 +66,7 @@ export const AdminCinemasPage: React.FC = () => {
                 showSuccess('Кінотеатр успішно видалено з мережі.');
                 fetchCinemas();
             } catch (err: any) {
-                showError(err.response?.data?.message || 'Не вдалося видалити кінотеатр.');
+                showError(getApiErrorMessage(err, 'Не вдалося видалити кінотеатр.'));
             }
         });
     };

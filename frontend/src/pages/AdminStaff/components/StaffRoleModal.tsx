@@ -1,16 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { UserCheck, X, Check } from 'lucide-react';
-import type { UserStaffDto } from '@/types/admin';
+import { UserRole, type UserRoleType, type UserStaffDto } from '@/types/admin';
+import { getApiErrorMessage } from '@/api/errors';
 import type { CinemaDto } from '@/types/cinemas';
-
-export const UserRole = {
-    SuperAdmin: 0,
-    CinemaManager: 1,
-    Cashier: 2,
-    Customer: 3
-} as const;
-
-export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 
 const RoleNameToEnumMap: Record<string, UserRoleType> = {
     SuperAdmin: UserRole.SuperAdmin,
@@ -19,19 +11,12 @@ const RoleNameToEnumMap: Record<string, UserRoleType> = {
     Customer: UserRole.Customer
 };
 
-const EnumToRoleNameMap: Record<UserRoleType, string> = {
-    [UserRole.SuperAdmin]: 'SuperAdmin',
-    [UserRole.CinemaManager]: 'CinemaManager',
-    [UserRole.Cashier]: 'Cashier',
-    [UserRole.Customer]: 'Customer'
-};
-
 interface StaffRoleModalProps {
     isOpen: boolean;
     user: UserStaffDto | null;
     cinemas: CinemaDto[];
     onClose: () => void;
-    onSave: (userId: string, newRoleName: string, cinemaId: string | null) => Promise<void>;
+    onSave: (userId: string, newRole: UserRoleType, cinemaId: string | null) => Promise<void>;
 }
 
 export const StaffRoleModal: React.FC<StaffRoleModalProps> = ({
@@ -69,14 +54,12 @@ export const StaffRoleModal: React.FC<StaffRoleModalProps> = ({
             return;
         }
 
-        const roleName = EnumToRoleNameMap[selectedRole] || 'Customer';
-
         setIsSubmitting(true);
         try {
-            await onSave(user.id, roleName, needCinema ? selectedCinemaId : null);
+            await onSave(user.id, selectedRole, needCinema ? selectedCinemaId : null);
             onClose();
         } catch (err: any) {
-            setModalError(err.response?.data?.message || 'Помилка при оновленні прав доступу.');
+            setModalError(getApiErrorMessage(err, 'Помилка при оновленні прав доступу.'));
         } finally {
             setIsSubmitting(false);
         }
