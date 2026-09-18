@@ -1,22 +1,25 @@
 using MediatR;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using StarPlex.Application.Common.Interfaces;
+using StarPlex.Infrastructure.Identity;
 using StarPlex.Infrastructure.Persistence;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace StarPlex.Application.IntegrationTests.Infrastructure;
 
+[Collection("IntegrationTestCollection")]
 public abstract class IntegrationTestBase : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _dbContainer;
+    private readonly DatabaseFixture _databaseFixture;
     private IServiceScope _scope = null!;
-    
+
     protected IApplicationDbContext DbContext { get; private set; } = null!;
     protected IMediator Mediator { get; private set; } = null!;
-    
+    protected IServiceProvider ServiceProvider => _scope.ServiceProvider;
+
     // Mocks for external dependencies
     protected Mock<IPaymentService> PaymentServiceMock { get; } = new();
     protected Mock<ISeatLockService> SeatLockServiceMock { get; } = new();
@@ -26,24 +29,21 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     protected Mock<IEmailService> EmailServiceMock { get; } = new();
     protected Mock<ISeatHubService> SeatHubServiceMock { get; } = new();
 
-    public IntegrationTestBase()
+    public IntegrationTestBase(DatabaseFixture databaseFixture)
     {
-        _dbContainer = new PostgreSqlBuilder("postgres:15-alpine")
-            .WithDatabase("starplex_test_db")
-            .WithUsername("postgres")
-            .WithPassword("postgres")
-            .Build();
+        _databaseFixture = databaseFixture;
     }
 
     public async Task InitializeAsync()
     {
-        await _dbContainer.StartAsync();
+        // Reset database tables preserving __EFMigrationsHistory
+        await _databaseFixture.ResetDatabaseAsync();
 
         var services = new ServiceCollection();
 
-        // 1. Add DbContext
+        // Register DbContext with shared PostgreSQL Testcontainer connection string
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(_dbContainer.GetConnectionString()));
+            options.UseNpgsql(_databaseFixture.ConnectionString));
 
         services.AddScoped<IApplicationDbContext>(provider =>
             provider.GetRequiredService<ApplicationDbContext>());
@@ -51,7 +51,18 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         services.AddLogging();
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(IApplicationDbContext).Assembly));
 
-        // 3. Register Mocked Dependencies
+        services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
+        {
+            options.Password.RequiredLength = 8;
+            options.Password.RequireDigit = true;
+            options.Password.RequireUppercase = false;
+            options.Password.RequireNonAlphanumeric = false;
+            options.User.RequireUniqueEmail = true;
+        })
+        .AddEntityFrameworkStores<ApplicationDbContext>()
+        .AddDefaultTokenProviders();
+
+        // Register Mocked Dependencies
         services.AddScoped(_ => PaymentServiceMock.Object);
         services.AddScoped(_ => SeatLockServiceMock.Object);
         services.AddScoped(_ => CurrentUserServiceMock.Object);
@@ -65,14 +76,11 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 
         DbContext = _scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
         Mediator = _scope.ServiceProvider.GetRequiredService<IMediator>();
-
-        var db = _scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        await db.Database.MigrateAsync();
     }
 
-    public async Task DisposeAsync()
+    public Task DisposeAsync()
     {
         _scope?.Dispose();
-        await _dbContainer.DisposeAsync();
+        return Task.CompletedTask;
     }
 }

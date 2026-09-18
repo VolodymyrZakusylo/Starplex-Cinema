@@ -1,3 +1,12 @@
+export const UserRole = {
+  SuperAdmin: 0,
+  CinemaManager: 1,
+  Cashier: 2,
+  Customer: 3
+} as const;
+
+export type UserRoleType = typeof UserRole[keyof typeof UserRole];
+
 export interface RevenueChartItem {
   date: string;
   revenue: number;

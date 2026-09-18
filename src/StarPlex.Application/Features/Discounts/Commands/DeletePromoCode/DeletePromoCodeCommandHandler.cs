@@ -1,10 +1,11 @@
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
 
 namespace StarPlex.Application.Features.Discounts.Commands.DeletePromoCode;
 
-public class DeletePromoCodeCommandHandler : IRequestHandler<DeletePromoCodeCommand, Unit>
+public class DeletePromoCodeCommandHandler : IRequestHandler<DeletePromoCodeCommand, DeletePromoCodeResult>
 {
     private readonly IApplicationDbContext _context;
 
@@ -13,16 +14,32 @@ public class DeletePromoCodeCommandHandler : IRequestHandler<DeletePromoCodeComm
         _context = context;
     }
 
-    public async Task<Unit> Handle(DeletePromoCodeCommand request, CancellationToken cancellationToken)
+    public async Task<DeletePromoCodeResult> Handle(DeletePromoCodeCommand request, CancellationToken cancellationToken)
     {
         var discount = await _context.Discounts.FindAsync(new object[] { request.Id }, cancellationToken);
 
         if (discount == null)
             throw new NotFoundException("Promo code", request.Id);
 
-        _context.Discounts.Remove(discount);
-        await _context.SaveChangesAsync(cancellationToken);
+        if (await _context.Bookings.AnyAsync(b => b.DiscountId == discount.Id, cancellationToken))
+        {
+            discount.IsActive = false;
+            await _context.SaveChangesAsync(cancellationToken);
+            return new DeletePromoCodeResult("Deactivated");
+        }
 
-        return Unit.Value;
+        _context.Discounts.Remove(discount);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            return new DeletePromoCodeResult("Deleted");
+        }
+        catch (DbUpdateException ex) when (_context.IsForeignKeyViolation(ex, "FK_Bookings_Discounts_DiscountId"))
+        {
+            _context.Discounts.Entry(discount).State = EntityState.Unchanged;
+            discount.IsActive = false;
+            await _context.SaveChangesAsync(cancellationToken);
+            return new DeletePromoCodeResult("Deactivated");
+        }
     }
 }

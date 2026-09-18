@@ -31,7 +31,18 @@ public class DeleteHallCommandHandler : IRequestHandler<DeleteHallCommand>
             throw new ForbiddenException("У вас немає прав для видалення залів цього кінотеатру.");
         }
 
+        const string conflict = "This hall has historical sessions that must be preserved. Deactivate the hall instead.";
+        if (await _context.Sessions.AnyAsync(s => s.HallId == hall.Id, cancellationToken))
+            throw new ConflictException(conflict);
+
         _context.Halls.Remove(hall);
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (_context.IsForeignKeyViolation(ex, "FK_Sessions_Halls_HallId"))
+        {
+            throw new ConflictException(conflict);
+        }
     }
 }

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Shield, Search, SlidersHorizontal, Edit2, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usersApi, type GetStaffParams } from '@/api/users';
 import { cinemasApi } from '@/api/cinemas';
-import type { UserStaffDto } from '@/types/admin';
+import type { UserStaffDto, UserRoleType } from '@/types/admin';
 import type { CinemaDto } from '@/types/cinemas';
 import { useToast } from '@/hooks/useToast';
 import { StaffRoleModal } from './components/StaffRoleModal';
@@ -80,8 +80,8 @@ export const AdminStaffPage: React.FC = () => {
         setIsModalOpen(true);
     };
 
-    const handleSaveRoleUpdate = async (userId: string, newRoleName: string, cinemaId: string | null) => {
-        await usersApi.updateRole(userId, newRoleName, cinemaId);
+    const handleSaveRoleUpdate = async (userId: string, newRole: UserRoleType, cinemaId: string | null) => {
+        await usersApi.updateRole(userId, newRole, cinemaId);
         showSuccess('Права та рівень доступу користувача успішно змінено.');
         fetchUsers();
     };

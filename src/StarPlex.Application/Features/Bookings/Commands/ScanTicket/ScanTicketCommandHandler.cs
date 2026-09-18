@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Common.Exceptions;
+using StarPlex.Application.Common.Helpers;
 using StarPlex.Domain.Enums;
 using System;
 using System.Threading;
@@ -68,6 +69,9 @@ public class ScanTicketCommandHandler : IRequestHandler<ScanTicketCommand, ScanT
         }
         await _context.SaveChangesAsync(cancellationToken);
 
+        var utcStartTime = DateTime.SpecifyKind(session.StartTime, DateTimeKind.Utc);
+        var kyivStartTime = TimeZoneInfo.ConvertTimeFromUtc(utcStartTime, TimeZoneHelpers.KyivTimeZone);
+
         return new ScanTicketResultDto
         {
             IsSuccess = true,
@@ -76,7 +80,7 @@ public class ScanTicketCommandHandler : IRequestHandler<ScanTicketCommand, ScanT
             HallName = session.Hall.Name,
             Row = ticket.BookingSeat.Seat.Row,
             Number = ticket.BookingSeat.Seat.Number,
-            StartTime = session.StartTime.ToString("HH:mm")
+            StartTime = kyivStartTime.ToString("HH:mm")
         };
     }
 }

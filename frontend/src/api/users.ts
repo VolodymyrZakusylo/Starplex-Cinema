@@ -1,5 +1,5 @@
 import api from './axios';
-import type { PagedUserStaffResponse } from '@/types/admin';
+import type { PagedUserStaffResponse, UserRoleType } from '@/types/admin';
 
 export interface GetStaffParams {
   searchTerm?: string;
@@ -15,7 +15,7 @@ export const usersApi = {
     return response.data;
   },
 
-  updateRole: async (userId: string, newRole: string, cinemaId?: string | null): Promise<void> => {
+  updateRole: async (userId: string, newRole: UserRoleType, cinemaId?: string | null): Promise<void> => {
     await api.put(`/Users/${userId}/role`, { newRole, cinemaId });
   },
 

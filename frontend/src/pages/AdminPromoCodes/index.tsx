@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Ticket, Plus, Trash2, Calendar, RefreshCw } from 'lucide-react';
 import { discountsApi } from '@/api/discounts';
+import { getApiErrorMessage } from '@/api/errors';
 import { useToast } from '@/hooks/useToast';
 import type { DiscountDto } from '@/types/discounts';
 
@@ -64,13 +65,13 @@ export const AdminPromoCodesPage: React.FC = () => {
   };
 
   const handleDeletePromo = (id: string) => {
-    confirm('Ви впевнені, що хочете деактивувати та остаточно видалити цей промокод? Клієнти більше не зможуть його застосувати.', async () => {
+    confirm('Видалити промокод? Якщо він пов’язаний із бронюваннями, його буде деактивовано зі збереженням історії.', async () => {
       try {
-        await discountsApi.delete(id);
-        showSuccess('Промокод успішно видалено.');
+        const result = await discountsApi.delete(id);
+        showSuccess(result.outcome === 'Deleted' ? 'Промокод успішно видалено.' : 'Промокод деактивовано, оскільки він має історію використання.');
         fetchPromoCodes();
       } catch (err) {
-        showError('Не вдалося видалити промокод.');
+        showError(getApiErrorMessage(err, 'Не вдалося видалити промокод.'));
       }
     });
   };

@@ -87,8 +87,9 @@ public class GenerateScheduleCommandHandler : IRequestHandler<GenerateScheduleCo
 
                 var sessionStartTimeKyiv = currentKyivTrackTime;
                 var sessionEndTimeKyiv = sessionStartTimeKyiv.AddMinutes(currentMovie.DurationInMinutes);
+                var occupiedEndTimeKyiv = sessionEndTimeKyiv.AddMinutes(CleanUpDurationInMinutes);
 
-                if (sessionEndTimeKyiv > endOfKyivDay)
+                if (occupiedEndTimeKyiv > endOfKyivDay)
                 {
                     break;
                 }

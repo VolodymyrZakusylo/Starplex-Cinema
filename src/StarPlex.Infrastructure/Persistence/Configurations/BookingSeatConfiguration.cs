@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using StarPlex.Domain.Entities;
 
@@ -15,6 +15,7 @@ public class BookingSeatConfiguration : IEntityTypeConfiguration<BookingSeat>
             .WithMany()
             .HasForeignKey(bs => bs.SeatId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.Property(bs => bs.PurchasePrice).HasColumnType("decimal(18,2)");
         builder.HasOne(bs => bs.Ticket)
             .WithOne(t => t.BookingSeat)
             .HasForeignKey<Ticket>(t => t.BookingSeatId);

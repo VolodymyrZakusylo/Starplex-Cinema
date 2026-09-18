@@ -21,6 +21,10 @@ namespace StarPlex.Application.IntegrationTests.Features.Authorization;
 // Real PostgreSQL and MediatR; only external services and the authenticated caller are mocked.
 public class CinemaScopeTests : IntegrationTestBase
 {
+    public CinemaScopeTests(DatabaseFixture fixture) : base(fixture)
+    {
+    }
+
     private readonly Guid _callerId = Guid.NewGuid();
 
     private sealed record Fixtures(Cinema A, Cinema B, Hall HallA, Hall HallA2, Hall HallB,
@@ -55,8 +59,8 @@ public class CinemaScopeTests : IntegrationTestBase
         var sessionB = new Session(movie.Id, hb.Id, start, 90, 150, 150, SessionStatus.Active);
         var ba = new Booking(customerOwned ? _callerId : Guid.Empty, sessionA.Id, 150, DateTime.UtcNow, BookingStatus.Confirmed);
         var bb = new Booking(customerOwned ? _callerId : Guid.Empty, sessionB.Id, 150, DateTime.UtcNow, BookingStatus.Confirmed);
-        var bsa = new BookingSeat(ba.Id, sa.Id);
-        var bsb = new BookingSeat(bb.Id, sb.Id);
+        var bsa = new BookingSeat(ba.Id, sa.Id, 150m);
+        var bsb = new BookingSeat(bb.Id, sb.Id, 150m);
         ba.BookingSeats.Add(bsa);
         bb.BookingSeats.Add(bsb);
         var ta = new Ticket(bsa.Id, "QA-SCOPE-A");
@@ -160,7 +164,9 @@ public class CinemaScopeTests : IntegrationTestBase
         }
         if (operation == "Sale")
         {
-            DbContext.Seats.Add(new Seat(f.HallA.Id, "2", 2, SeatType.Standard));
+            var saleSeat = new Seat(f.HallA.Id, "2", 2, SeatType.Standard);
+            DbContext.Seats.Add(saleSeat);
+            DbContext.SelectedSeats.Add(new SelectedSeat(f.SessionA.Id, saleSeat.Id, _callerId, DateTime.UtcNow.AddMinutes(10)));
             await DbContext.SaveChangesAsync(default);
             before = await Snapshot();
         }

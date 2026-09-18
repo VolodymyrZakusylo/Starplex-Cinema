@@ -27,8 +27,16 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
 
         var utcNow = DateTime.UtcNow;
 
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        if (dbContext.Database.ProviderName?.Contains("Npgsql") == true)
+        {
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Sessions\" WHERE \"Id\" = {request.SessionId} FOR UPDATE", cancellationToken);
+        }
+
+        utcNow = DateTime.UtcNow;
+
         var session = await _context.Sessions
-            .AsNoTracking()
             .Include(s => s.Hall)
             .FirstOrDefaultAsync(s => s.Id == request.SessionId, cancellationToken);
 
@@ -42,7 +50,6 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
         }
 
         var seats = await _context.Seats
-            .AsNoTracking()
             .Where(s => s.HallId == session.HallId && request.SeatIds.Contains(s.Id))
             .ToListAsync(cancellationToken);
 
@@ -52,15 +59,46 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
         if (seats.Any(s => s.Status == SeatStatus.Inactive))
             throw new BusinessRuleException("Cannot sell tickets for an inactive or broken seat.");
 
+        var callerUserId = _currentUserService.UserId;
+
+        var validCallerLocks = await _context.SelectedSeats
+            .Where(ss => ss.SessionId == request.SessionId &&
+                         request.SeatIds.Contains(ss.SeatId) &&
+                         callerUserId.HasValue &&
+                         ss.UserId == callerUserId.Value &&
+                         ss.LockedUntil > utcNow)
+            .ToListAsync(cancellationToken);
+
+        if (validCallerLocks.Count != request.SeatIds.Count)
+        {
+            throw new BusinessRuleException("Your reservation session for some of these seats has expired or is invalid.");
+        }
+
+        var alreadyTakenSeatIds = await _context.BookingSeats
+            .Where(bs => bs.Booking.SessionId == request.SessionId &&
+                         request.SeatIds.Contains(bs.SeatId) &&
+                         (bs.Booking.Status == BookingStatus.Confirmed ||
+                          bs.Booking.Status == BookingStatus.Pending))
+            .Select(bs => bs.SeatId)
+            .ToListAsync(cancellationToken);
+
+        if (alreadyTakenSeatIds.Any())
+        {
+            var takenSeats = seats.Where(s => alreadyTakenSeatIds.Contains(s.Id)).ToList();
+            var seatDescs = string.Join(", ", takenSeats.Select(s => $"Row {s.Row}, Seat {s.Number}"));
+            throw new BusinessRuleException($"The following seat(s) are already booked or sold for this session: {seatDescs}.");
+        }
+
         decimal totalPrice = 0;
         var bookingId = Guid.NewGuid();
         var bookingSeats = new List<BookingSeat>();
 
         foreach (var seat in seats)
         {
-            totalPrice += PricingCalculator.CalculateTicketPrice(session.BasePrice, seat.Type);
+            decimal seatPrice = PricingCalculator.CalculateTicketPrice(session.BasePrice, seat.Type);
+            totalPrice += seatPrice;
 
-            var bookingSeat = new BookingSeat(bookingId, seat.Id) { Id = Guid.NewGuid() };
+            var bookingSeat = new BookingSeat(bookingId, seat.Id, seatPrice) { Id = Guid.NewGuid() };
             bookingSeats.Add(bookingSeat);
         }
 
@@ -76,38 +114,33 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
             BookingSeats = bookingSeats
         };
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         _context.Bookings.Add(booking);
-            await _context.SaveChangesAsync(cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
 
-            var temporaryLocks = await _context.SelectedSeats
-                .Where(ss => ss.SessionId == request.SessionId && request.SeatIds.Contains(ss.SeatId))
-                .ToListAsync(cancellationToken);
+        if (validCallerLocks.Any())
+        {
+            _context.SelectedSeats.RemoveRange(validCallerLocks);
+        }
 
-            if (temporaryLocks.Any())
-            {
-                _context.SelectedSeats.RemoveRange(temporaryLocks);
-            }
+        string cashierReferenceId = $"POS-{request.PaymentMethod.ToUpper()}-{Guid.NewGuid().ToString()[..8].ToUpper()}";
 
-            string cashierReferenceId = $"POS-{request.PaymentMethod.ToUpper()}-{Guid.NewGuid().ToString()[..8].ToUpper()}";
+        var payment = new Payment(booking.Id, cashierReferenceId, booking.TotalPrice, PaymentStatus.Succeeded)
+        {
+            Id = Guid.NewGuid(),
+            PaidAt = utcNow
+        };
+        _context.Payments.Add(payment);
 
-            var payment = new Payment(booking.Id, cashierReferenceId, booking.TotalPrice, PaymentStatus.Succeeded)
-            {
-                Id = Guid.NewGuid(),
-                PaidAt = utcNow
-            };
-            _context.Payments.Add(payment);
+        foreach (var bookingSeat in booking.BookingSeats)
+        {
+            var ticket = TicketFactory.CreateForSeat(bookingSeat.Id);
 
-            foreach (var bookingSeat in booking.BookingSeats)
-            {
-                var ticket = TicketFactory.CreateForSeat(bookingSeat.Id);
+            _context.Tickets.Add(ticket);
+        }
 
-                _context.Tickets.Add(ticket);
-            }
+        await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
-            await _context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-
-            return booking.Id;
+        return booking.Id;
     }
 }
