@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using StarPlex.Application.Common.Interfaces;
+using StarPlex.Application.Common.Models;
 using StarPlex.Domain.Enums;
 
 namespace StarPlex.Infrastructure.Services;
@@ -103,6 +104,7 @@ public class ExpiredLocksCleanupService : BackgroundService
 
                 var booking = await bookingDbContext.Bookings
                     .Include(b => b.BookingSeats)
+                    .Include(b => b.Payment)
                     .FirstOrDefaultAsync(b => b.Id == bookingId, ct);
 
                 if (booking == null)
@@ -114,6 +116,22 @@ public class ExpiredLocksCleanupService : BackgroundService
                 if (booking.Status != BookingStatus.Pending || booking.BookingTime > bookingThreshold)
                 {
                     _logger.LogInformation("Booking {BookingId} status is '{Status}' or no longer expired; skipping cancellation.", bookingId, booking.Status);
+                    await transaction.RollbackAsync(ct);
+                    continue;
+                }
+
+                if (booking.Payment == null || string.IsNullOrWhiteSpace(booking.Payment.StripePaymentIntentId))
+                {
+                    _logger.LogWarning("Cannot safely expire booking {BookingId} without a persisted PaymentIntent ID; leaving pending for retry.", bookingId);
+                    await transaction.RollbackAsync(ct);
+                    continue;
+                }
+
+                var paymentService = bookingScope.ServiceProvider.GetRequiredService<IPaymentService>();
+                var expiryResult = await paymentService.ExpirePaymentIntentAsync(booking.Payment.StripePaymentIntentId, ct);
+                if (expiryResult != PaymentIntentExpiryResult.Cancelled)
+                {
+                    _logger.LogWarning("PaymentIntent expiry for booking {BookingId} returned {Result}; leaving pending for confirmation or retry.", bookingId, expiryResult);
                     await transaction.RollbackAsync(ct);
                     continue;
                 }

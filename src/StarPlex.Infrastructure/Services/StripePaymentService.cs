@@ -73,6 +73,38 @@ public class StripePaymentService : IPaymentService
         }
     }
 
+    public async Task<PaymentIntentExpiryResult> ExpirePaymentIntentAsync(string paymentIntentId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(paymentIntentId)) return PaymentIntentExpiryResult.Indeterminate;
+
+        try
+        {
+            var service = new PaymentIntentService();
+            var intent = await service.GetAsync(paymentIntentId, cancellationToken: ct);
+
+            if (intent?.Status == "succeeded") return PaymentIntentExpiryResult.AlreadySucceeded;
+            if (intent?.Status == "canceled") return PaymentIntentExpiryResult.Cancelled;
+            if (intent == null) return PaymentIntentExpiryResult.Indeterminate;
+
+            intent = await service.CancelAsync(paymentIntentId, cancellationToken: ct);
+            return intent?.Status switch
+            {
+                "canceled" => PaymentIntentExpiryResult.Cancelled,
+                "succeeded" => PaymentIntentExpiryResult.AlreadySucceeded,
+                _ => PaymentIntentExpiryResult.Indeterminate
+            };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not safely expire Stripe PaymentIntent {PaymentIntentId}", paymentIntentId);
+            return PaymentIntentExpiryResult.Indeterminate;
+        }
+    }
+
     public async Task<bool> RefundPaymentAsync(string paymentIntentId, decimal amount, string currency = "uah", CancellationToken ct = default, string? idempotencyKey = null)
     {
         try

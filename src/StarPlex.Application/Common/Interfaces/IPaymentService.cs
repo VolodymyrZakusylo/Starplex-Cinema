@@ -1,3 +1,5 @@
+using StarPlex.Application.Common.Models;
+
 namespace StarPlex.Application.Common.Interfaces;
 
 public interface IPaymentService
@@ -9,4 +11,6 @@ public interface IPaymentService
     Task<bool> RefundPaymentAsync(string paymentIntentId, decimal amount, string currency = "uah", CancellationToken ct = default, string? idempotencyKey = null);
 
     Task<bool> UpdatePaymentIntentAmountAsync(string paymentIntentId, decimal amount, string currency = "uah", CancellationToken ct = default);
+
+    Task<PaymentIntentExpiryResult> ExpirePaymentIntentAsync(string paymentIntentId, CancellationToken ct = default);
 }

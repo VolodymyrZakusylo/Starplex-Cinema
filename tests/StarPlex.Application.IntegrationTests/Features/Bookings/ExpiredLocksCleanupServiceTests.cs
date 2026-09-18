@@ -2,6 +2,8 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using StarPlex.Application.Common.Models;
 using StarPlex.Application.Features.Bookings.Commands.ConfirmBooking;
 using StarPlex.Application.IntegrationTests.Infrastructure;
 using StarPlex.Domain.Entities;
@@ -49,6 +51,9 @@ public class ExpiredLocksCleanupServiceTests : IntegrationTestBase
 
         var selectedSeat = new SelectedSeat(session.Id, seat.Id, userId, DateTime.UtcNow.AddMinutes(5));
         DbContext.SelectedSeats.Add(selectedSeat);
+        DbContext.Payments.Add(new Payment(booking.Id, "pi_cleanup_unpaid", 150m, PaymentStatus.Pending));
+        PaymentServiceMock.Setup(p => p.ExpirePaymentIntentAsync("pi_cleanup_unpaid", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(PaymentIntentExpiryResult.Cancelled);
         await DbContext.SaveChangesAsync(CancellationToken.None);
 
         var scopeFactory = ServiceProvider.GetRequiredService<IServiceScopeFactory>();
@@ -141,6 +146,8 @@ public class ExpiredLocksCleanupServiceTests : IntegrationTestBase
             Id = Guid.NewGuid()
         };
         DbContext.Payments.Add(payment);
+        PaymentServiceMock.Setup(p => p.ExpirePaymentIntentAsync("pi_cleanup_win_1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(PaymentIntentExpiryResult.Cancelled);
         DbContext.Bookings.Add(booking);
         await DbContext.SaveChangesAsync(CancellationToken.None);
 
