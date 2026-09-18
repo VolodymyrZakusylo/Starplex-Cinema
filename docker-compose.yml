@@ -58,5 +58,19 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_STRIPE_PUBLIC_KEY: ${STRIPE_PUBLISHABLE_KEY}
+    container_name: starplex_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   starplex_pg_data:
