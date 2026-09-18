@@ -41,6 +41,8 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
                 await dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Sessions\" WHERE \"Id\" = {request.SessionId} FOR UPDATE", cancellationToken);
             }
 
+            utcNow = DateTime.UtcNow;
+
             var session = await _context.Sessions
                 .FirstOrDefaultAsync(s => s.Id == request.SessionId, cancellationToken);
 

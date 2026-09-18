@@ -34,6 +34,8 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
             await dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Sessions\" WHERE \"Id\" = {request.SessionId} FOR UPDATE", cancellationToken);
         }
 
+        utcNow = DateTime.UtcNow;
+
         var session = await _context.Sessions
             .Include(s => s.Hall)
             .FirstOrDefaultAsync(s => s.Id == request.SessionId, cancellationToken);

@@ -1,6 +1,8 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using StarPlex.Application.Common.Exceptions;
+using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Features.Bookings.Commands.CreateCashierSale;
 using StarPlex.Application.IntegrationTests.Infrastructure;
 using StarPlex.Domain.Entities;
@@ -423,5 +425,49 @@ public class CashierSaleConcurrencyTests : IntegrationTestBase
         var otherLockExists = await DbContext.SelectedSeats
             .AnyAsync(ss => ss.SessionId == session.Id && ss.SeatId == seats[1].Id && ss.UserId == otherUserId);
         otherLockExists.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CashierSale_StaleSeatLockExpirationDuringLockContention_RejectsExpiredLockPostAcquisition()
+    {
+        var (cinema, hall, session, seats) = await SeedCinemaSessionWithSeats(1);
+        SetStaffUser(cinema.Id);
+
+        await SeedSelectedSeatLocks(session.Id, new[] { seats[0].Id }, _staffUserId, minutesValid: 0);
+        var seatLock = await DbContext.SelectedSeats.FirstAsync(ss => ss.SessionId == session.Id && ss.SeatId == seats[0].Id);
+        seatLock.LockedUntil = DateTime.UtcNow.AddMilliseconds(500);
+        await DbContext.SaveChangesAsync(default);
+
+        using var holderScope = ServiceProvider.CreateScope();
+        var holderContext = holderScope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+        var holderDb = (DbContext)holderContext;
+        await using var holderTx = await holderDb.Database.BeginTransactionAsync();
+        await holderDb.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Sessions\" WHERE \"Id\" = {session.Id} FOR UPDATE");
+
+        var command = new CreateCashierSaleCommand
+        {
+            SessionId = session.Id,
+            SeatIds = new List<Guid> { seats[0].Id },
+            PaymentMethod = "Cash"
+        };
+
+        var sendTask = Task.Run(async () =>
+        {
+            using var scope = ServiceProvider.CreateScope();
+            var mediator = scope.ServiceProvider.GetRequiredService<MediatR.IMediator>();
+            return await mediator.Send(command);
+        });
+
+        await Task.Delay(800);
+        await holderTx.RollbackAsync();
+
+        Func<Task> action = async () => await sendTask;
+        await action.Should().ThrowAsync<BusinessRuleException>();
+
+        var totalBookings = await DbContext.Bookings.CountAsync(b => b.SessionId == session.Id);
+        totalBookings.Should().Be(0);
+
+        var totalTickets = await DbContext.Tickets.CountAsync(t => t.BookingSeat.Booking.SessionId == session.Id);
+        totalTickets.Should().Be(0);
     }
 }
