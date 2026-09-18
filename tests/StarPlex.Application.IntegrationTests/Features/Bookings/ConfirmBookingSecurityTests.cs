@@ -234,7 +234,7 @@ public class ConfirmBookingSecurityTests : IntegrationTestBase
         {
             Id = Guid.NewGuid()
         };
-        var bookingSeat = new BookingSeat(booking.Id, seat.Id) { Id = Guid.NewGuid() };
+        var bookingSeat = new BookingSeat(booking.Id, seat.Id, amount) { Id = Guid.NewGuid() };
         booking.BookingSeats.Add(bookingSeat);
         DbContext.Bookings.Add(booking);
 

@@ -15,7 +15,7 @@ public class TicketTests
     private Ticket CreateTestTicket(BookingStatus status)
     {
         var booking = new Booking(Guid.NewGuid(), Guid.NewGuid(), 100, DateTime.UtcNow, status);
-        var bookingSeat = new BookingSeat(booking.Id, Guid.NewGuid()) { Booking = booking };
+        var bookingSeat = new BookingSeat(booking.Id, Guid.NewGuid(), 100m) { Booking = booking };
         return new Ticket(bookingSeat.Id, "SPX-TEST", isUsed: false) { BookingSeat = bookingSeat };
     }
 

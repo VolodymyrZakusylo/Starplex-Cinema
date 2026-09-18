@@ -41,7 +41,7 @@ public class ConfirmBookingCommandHandlerTests : IntegrationTestBase
         {
             Id = Guid.NewGuid()
         };
-        var bookingSeat = new BookingSeat(booking.Id, seat.Id) { Id = Guid.NewGuid() };
+        var bookingSeat = new BookingSeat(booking.Id, seat.Id, 150m) { Id = Guid.NewGuid() };
         booking.BookingSeats.Add(bookingSeat);
         DbContext.Bookings.Add(booking);
 
@@ -138,7 +138,7 @@ public class ConfirmBookingCommandHandlerTests : IntegrationTestBase
         {
             Id = Guid.NewGuid()
         };
-        var bookingSeat = new BookingSeat(booking.Id, seat.Id) { Id = Guid.NewGuid() };
+        var bookingSeat = new BookingSeat(booking.Id, seat.Id, 150m) { Id = Guid.NewGuid() };
         booking.BookingSeats.Add(bookingSeat);
         DbContext.Bookings.Add(booking);
 

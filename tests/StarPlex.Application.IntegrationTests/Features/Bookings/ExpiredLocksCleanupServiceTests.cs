@@ -43,7 +43,7 @@ public class ExpiredLocksCleanupServiceTests : IntegrationTestBase
         {
             Id = Guid.NewGuid()
         };
-        var bookingSeat = new BookingSeat(booking.Id, seat.Id) { Id = Guid.NewGuid() };
+        var bookingSeat = new BookingSeat(booking.Id, seat.Id, 150m) { Id = Guid.NewGuid() };
         booking.BookingSeats.Add(bookingSeat);
         DbContext.Bookings.Add(booking);
 
@@ -92,7 +92,7 @@ public class ExpiredLocksCleanupServiceTests : IntegrationTestBase
         {
             Id = Guid.NewGuid()
         };
-        var bookingSeat = new BookingSeat(booking.Id, seat.Id) { Id = Guid.NewGuid() };
+        var bookingSeat = new BookingSeat(booking.Id, seat.Id, 150m) { Id = Guid.NewGuid() };
         booking.BookingSeats.Add(bookingSeat);
         DbContext.Bookings.Add(booking);
         await DbContext.SaveChangesAsync(CancellationToken.None);
@@ -133,7 +133,7 @@ public class ExpiredLocksCleanupServiceTests : IntegrationTestBase
         {
             Id = Guid.NewGuid()
         };
-        var bookingSeat = new BookingSeat(booking.Id, seat.Id) { Id = Guid.NewGuid() };
+        var bookingSeat = new BookingSeat(booking.Id, seat.Id, 150m) { Id = Guid.NewGuid() };
         booking.BookingSeats.Add(bookingSeat);
 
         var payment = new Payment(booking.Id, "pi_cleanup_win_1", 150m, PaymentStatus.Pending)
@@ -203,7 +203,7 @@ public class ExpiredLocksCleanupServiceTests : IntegrationTestBase
         {
             Id = Guid.NewGuid()
         };
-        var bookingSeat = new BookingSeat(booking.Id, seat.Id) { Id = Guid.NewGuid() };
+        var bookingSeat = new BookingSeat(booking.Id, seat.Id, 150m) { Id = Guid.NewGuid() };
         booking.BookingSeats.Add(bookingSeat);
 
         var payment = new Payment(booking.Id, "pi_contention_1", 150m, PaymentStatus.Pending)

@@ -59,8 +59,8 @@ public class CinemaScopeTests : IntegrationTestBase
         var sessionB = new Session(movie.Id, hb.Id, start, 90, 150, 150, SessionStatus.Active);
         var ba = new Booking(customerOwned ? _callerId : Guid.Empty, sessionA.Id, 150, DateTime.UtcNow, BookingStatus.Confirmed);
         var bb = new Booking(customerOwned ? _callerId : Guid.Empty, sessionB.Id, 150, DateTime.UtcNow, BookingStatus.Confirmed);
-        var bsa = new BookingSeat(ba.Id, sa.Id);
-        var bsb = new BookingSeat(bb.Id, sb.Id);
+        var bsa = new BookingSeat(ba.Id, sa.Id, 150m);
+        var bsb = new BookingSeat(bb.Id, sb.Id, 150m);
         ba.BookingSeats.Add(bsa);
         bb.BookingSeats.Add(bsb);
         var ta = new Ticket(bsa.Id, "QA-SCOPE-A");

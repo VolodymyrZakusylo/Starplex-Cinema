@@ -93,9 +93,10 @@ public class CreateCashierSaleCommandHandler : IRequestHandler<CreateCashierSale
 
         foreach (var seat in seats)
         {
-            totalPrice += PricingCalculator.CalculateTicketPrice(session.BasePrice, seat.Type);
+            decimal seatPrice = PricingCalculator.CalculateTicketPrice(session.BasePrice, seat.Type);
+            totalPrice += seatPrice;
 
-            var bookingSeat = new BookingSeat(bookingId, seat.Id) { Id = Guid.NewGuid() };
+            var bookingSeat = new BookingSeat(bookingId, seat.Id, seatPrice) { Id = Guid.NewGuid() };
             bookingSeats.Add(bookingSeat);
         }
 

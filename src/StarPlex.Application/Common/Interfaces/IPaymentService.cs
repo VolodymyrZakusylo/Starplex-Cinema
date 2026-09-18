@@ -6,5 +6,7 @@ public interface IPaymentService
 
     Task<bool> VerifyPaymentIntentAsync(string paymentIntentId, Guid bookingId, decimal expectedAmount, string currency = "uah", CancellationToken ct = default);
 
-    Task<bool> RefundPaymentAsync(string paymentIntentId, decimal amount, string currency = "uah", CancellationToken ct = default);
+    Task<bool> RefundPaymentAsync(string paymentIntentId, decimal amount, string currency = "uah", CancellationToken ct = default, string? idempotencyKey = null);
+
+    Task<bool> UpdatePaymentIntentAmountAsync(string paymentIntentId, decimal amount, string currency = "uah", CancellationToken ct = default);
 }

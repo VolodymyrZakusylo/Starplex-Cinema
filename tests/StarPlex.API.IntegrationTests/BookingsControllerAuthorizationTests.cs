@@ -57,7 +57,7 @@ public class BookingsControllerAuthorizationTests
         var seatA = new Seat(hallA.Id, "1", 1, SeatType.Standard);
 
         var bookingA = new Booking(customerOwned ? _callerId : Guid.Empty, sessionA.Id, 150, DateTime.UtcNow, BookingStatus.Confirmed);
-        var bookingSeatA = new BookingSeat(bookingA.Id, seatA.Id);
+        var bookingSeatA = new BookingSeat(bookingA.Id, seatA.Id, 150m);
         bookingA.BookingSeats.Add(bookingSeatA);
         var ticketA = new Ticket(bookingSeatA.Id, "TICKET-A");
 

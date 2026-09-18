@@ -128,17 +128,16 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
                 if (seats.Any(s => s.Status == SeatStatus.Inactive))
                     throw new BusinessRuleException("One or more selected seats are undergoing technical maintenance and cannot be purchased.");
 
-                decimal totalPrice = 0;
-                var bookingId = Guid.NewGuid();
-                var bookingSeats = new List<BookingSeat>();
-
+                decimal totalBasePrice = 0;
+                var basePrices = new List<decimal>();
                 foreach (var seat in seats)
                 {
-                    totalPrice += PricingCalculator.CalculateTicketPrice(session.BasePrice, seat.Type);
-                    var bookingSeat = new BookingSeat(bookingId, seat.Id) { Id = Guid.NewGuid() };
-                    bookingSeats.Add(bookingSeat);
+                    decimal seatBasePrice = PricingCalculator.CalculateTicketPrice(session.BasePrice, seat.Type);
+                    basePrices.Add(seatBasePrice);
+                    totalBasePrice += seatBasePrice;
                 }
 
+                decimal totalPrice = totalBasePrice;
                 Discount? appliedDiscount = null;
                 if (!string.IsNullOrWhiteSpace(request.PromoCode))
                 {
@@ -154,6 +153,28 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
                     {
                         throw new BusinessRuleException("The promo code provided is invalid, expired, or has reached its usage limit.");
                     }
+                }
+
+                var bookingId = Guid.NewGuid();
+                var bookingSeats = new List<BookingSeat>();
+                decimal accumulatedPurchasePrice = 0;
+
+                for (int i = 0; i < seats.Count; i++)
+                {
+                    decimal seatPurchasePrice;
+                    if (i == seats.Count - 1)
+                    {
+                        seatPurchasePrice = totalPrice - accumulatedPurchasePrice;
+                    }
+                    else
+                    {
+                        decimal ratio = totalBasePrice > 0 ? totalPrice / totalBasePrice : 0;
+                        seatPurchasePrice = Math.Round(basePrices[i] * ratio, 2, MidpointRounding.AwayFromZero);
+                        accumulatedPurchasePrice += seatPurchasePrice;
+                    }
+
+                    var bookingSeat = new BookingSeat(bookingId, seats[i].Id, seatPurchasePrice) { Id = Guid.NewGuid() };
+                    bookingSeats.Add(bookingSeat);
                 }
 
                 var booking = new Booking(
@@ -195,7 +216,7 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
             targetBooking.Id,
             targetBooking.TotalPrice,
             "uah",
-            idempotencyKey: targetBooking.Id.ToString(),
+            targetBooking.Id.ToString(),
             cancellationToken);
 
         string stripePaymentIntentId = clientSecret.Split("_secret_")[0];

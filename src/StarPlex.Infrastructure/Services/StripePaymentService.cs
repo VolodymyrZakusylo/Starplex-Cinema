@@ -73,7 +73,7 @@ public class StripePaymentService : IPaymentService
         }
     }
 
-    public async Task<bool> RefundPaymentAsync(string paymentIntentId, decimal amount, string currency = "uah", CancellationToken ct = default)
+    public async Task<bool> RefundPaymentAsync(string paymentIntentId, decimal amount, string currency = "uah", CancellationToken ct = default, string? idempotencyKey = null)
     {
         try
         {
@@ -84,14 +84,44 @@ public class StripePaymentService : IPaymentService
                 Reason = RefundReasons.RequestedByCustomer
             };
 
+            var requestOptions = new RequestOptions();
+            if (!string.IsNullOrEmpty(idempotencyKey))
+            {
+                requestOptions.IdempotencyKey = idempotencyKey;
+            }
+
             var service = new RefundService();
-            var refund = await service.CreateAsync(options, cancellationToken: ct);
+            var refund = await service.CreateAsync(options, requestOptions, cancellationToken: ct);
 
             return refund.Status == "succeeded" || refund.Status == "pending";
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to refund payment {PaymentIntentId}", paymentIntentId);
+            return false;
+        }
+    }
+
+    public async Task<bool> UpdatePaymentIntentAmountAsync(string paymentIntentId, decimal amount, string currency = "uah", CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(paymentIntentId)) return false;
+
+        try
+        {
+            var options = new PaymentIntentUpdateOptions
+            {
+                Amount = (long)(amount * 100),
+                Currency = currency.ToLower()
+            };
+
+            var service = new PaymentIntentService();
+            var intent = await service.UpdateAsync(paymentIntentId, options, cancellationToken: ct);
+
+            return intent != null && intent.Amount == (long)(amount * 100);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update Stripe PaymentIntent {PaymentIntentId} amount to {Amount}", paymentIntentId, amount);
             return false;
         }
     }

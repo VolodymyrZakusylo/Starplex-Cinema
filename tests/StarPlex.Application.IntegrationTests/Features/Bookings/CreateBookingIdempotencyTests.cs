@@ -259,7 +259,7 @@ public class CreateBookingIdempotencyTests : IntegrationTestBase
         await SeedSelectedSeatLocks(session.Id, new[] { seats[0].Id }, userA);
 
         var existingBooking = new Booking(userA, session.Id, 200, DateTime.UtcNow, BookingStatus.Pending);
-        existingBooking.BookingSeats.Add(new BookingSeat(existingBooking.Id, seats[0].Id));
+        existingBooking.BookingSeats.Add(new BookingSeat(existingBooking.Id, seats[0].Id, 200m));
         DbContext.Bookings.Add(existingBooking);
         await DbContext.SaveChangesAsync(default);
 
@@ -290,7 +290,7 @@ public class CreateBookingIdempotencyTests : IntegrationTestBase
         var userB = Guid.NewGuid();
 
         var confirmedBooking = new Booking(userA, session.Id, 200, DateTime.UtcNow, BookingStatus.Confirmed);
-        confirmedBooking.BookingSeats.Add(new BookingSeat(confirmedBooking.Id, seats[1].Id));
+        confirmedBooking.BookingSeats.Add(new BookingSeat(confirmedBooking.Id, seats[1].Id, 200m));
         DbContext.Bookings.Add(confirmedBooking);
         await DbContext.SaveChangesAsync(default);
 

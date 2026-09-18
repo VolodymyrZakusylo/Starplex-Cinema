@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using StarPlex.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using StarPlex.Infrastructure.Persistence;
 namespace StarPlex.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260918170000_AddPurchasePriceToBookingSeat")]
+    partial class AddPurchasePriceToBookingSeat
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -823,7 +826,7 @@ namespace StarPlex.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.HasOne("StarPlex.Domain.Entities.Session", "Session")
-                        .WithMany("SelectedSeats")
+                        .WithMany()
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -836,9 +839,9 @@ namespace StarPlex.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("StarPlex.Domain.Entities.Session", b =>
                 {
                     b.HasOne("StarPlex.Domain.Entities.Hall", "Hall")
-                        .WithMany()
+                        .WithMany("Sessions")
                         .HasForeignKey("HallId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("StarPlex.Domain.Entities.Movie", "Movie")
@@ -884,6 +887,8 @@ namespace StarPlex.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("StarPlex.Domain.Entities.Hall", b =>
                 {
                     b.Navigation("Seats");
+
+                    b.Navigation("Sessions");
                 });
 
             modelBuilder.Entity("StarPlex.Domain.Entities.Movie", b =>
@@ -894,8 +899,6 @@ namespace StarPlex.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("StarPlex.Domain.Entities.Session", b =>
                 {
                     b.Navigation("Bookings");
-
-                    b.Navigation("SelectedSeats");
                 });
 #pragma warning restore 612, 618
         }

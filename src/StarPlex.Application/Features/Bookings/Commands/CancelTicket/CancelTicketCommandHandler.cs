@@ -1,9 +1,9 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using StarPlex.Application.Common.Exceptions;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Domain.Enums;
-using StarPlex.Domain.Services;
 
 namespace StarPlex.Application.Features.Bookings.Commands.CancelTicket;
 
@@ -28,10 +28,9 @@ public class CancelTicketCommandHandler : IRequestHandler<CancelTicketCommand, b
         if (_context is not DbContext dbContext) return false;
 
         var ticket = await _context.Tickets
-            .Include(t => t.BookingSeat).ThenInclude(bs => bs.Seat)
-            .Include(t => t.BookingSeat).ThenInclude(bs => bs.Booking).ThenInclude(b => b.Session)
-            .Include(t => t.BookingSeat).ThenInclude(bs => bs.Booking).ThenInclude(b => b.Payment)
-            .Include(t => t.BookingSeat).ThenInclude(bs => bs.Booking).ThenInclude(b => b.BookingSeats).ThenInclude(bs => bs.Seat)
+            .Include(t => t.BookingSeat)
+            .Include(t => t.BookingSeat.Booking).ThenInclude(b => b.Session)
+            .Include(t => t.BookingSeat.Booking).ThenInclude(b => b.Payment)
             .FirstOrDefaultAsync(t => t.Id == request.TicketId, cancellationToken);
 
         if (ticket == null) return false;
@@ -42,25 +41,20 @@ public class CancelTicketCommandHandler : IRequestHandler<CancelTicketCommand, b
         if (!booking.CanCancel(DateTime.UtcNow)) return false;
         if (booking.Payment == null || string.IsNullOrEmpty(booking.Payment.StripePaymentIntentId)) return false;
 
-        decimal baseTicketPrice = PricingCalculator.CalculateTicketPrice(booking.Session.BasePrice, ticket.BookingSeat.Seat.Type);
-
-        decimal refundAmount = baseTicketPrice;
-        if (booking.DiscountId != null)
+        decimal refundAmount = ticket.BookingSeat.PurchasePrice;
+        if (refundAmount <= 0)
         {
-            decimal totalBasePrice = booking.BookingSeats.Sum(bs => PricingCalculator.CalculateTicketPrice(booking.Session.BasePrice, bs.Seat.Type));
-
-            if (totalBasePrice > 0)
-            {
-                decimal discountRatio = booking.TotalPrice / totalBasePrice;
-                refundAmount = Math.Round(baseTicketPrice * discountRatio, 2);
-            }
+            throw new BusinessRuleException("Historical purchase price is not available for this ticket.");
         }
+
+        string idempotencyKey = $"ticket_refund_{request.TicketId}";
 
         var refundResult = await _paymentService.RefundPaymentAsync(
             booking.Payment.StripePaymentIntentId,
             refundAmount,
             "uah",
-            cancellationToken
+            cancellationToken,
+            idempotencyKey: idempotencyKey
         );
 
         if (!refundResult)
@@ -71,16 +65,35 @@ public class CancelTicketCommandHandler : IRequestHandler<CancelTicketCommand, b
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        _context.Tickets.Remove(ticket);
-        _context.BookingSeats.Remove(ticket.BookingSeat);
+        if (dbContext.Database.ProviderName?.Contains("Npgsql") == true)
+        {
+            await dbContext.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT 1 FROM \"Tickets\" WHERE \"Id\" = {request.TicketId} FOR UPDATE", cancellationToken);
+        }
+
+        var ticketToCancel = await _context.Tickets
+            .Include(t => t.BookingSeat)
+            .Include(t => t.BookingSeat.Booking).ThenInclude(b => b.Payment)
+            .FirstOrDefaultAsync(t => t.Id == request.TicketId, cancellationToken);
+
+        if (ticketToCancel == null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
+
+        var bookingToUpdate = ticketToCancel.BookingSeat.Booking;
+
+        _context.Tickets.Remove(ticketToCancel);
+        _context.BookingSeats.Remove(ticketToCancel.BookingSeat);
 
         var remainingSeatsCount = await _context.BookingSeats
-            .CountAsync(bs => bs.BookingId == booking.Id && bs.Id != ticket.BookingSeatId, cancellationToken);
+            .CountAsync(bs => bs.BookingId == bookingToUpdate.Id && bs.Id != ticketToCancel.BookingSeatId, cancellationToken);
 
-        booking.CancelIfEmpty(remainingSeatsCount);
-        if (remainingSeatsCount == 0 && booking.Payment != null)
+        bookingToUpdate.CancelIfEmpty(remainingSeatsCount);
+        if (remainingSeatsCount == 0 && bookingToUpdate.Payment != null)
         {
-            booking.Payment.Status = PaymentStatus.Refunded;
+            bookingToUpdate.Payment.Status = PaymentStatus.Refunded;
         }
 
         await _context.SaveChangesAsync(cancellationToken);

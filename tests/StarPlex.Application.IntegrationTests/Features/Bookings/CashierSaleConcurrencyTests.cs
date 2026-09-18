@@ -128,7 +128,7 @@ public class CashierSaleConcurrencyTests : IntegrationTestBase
         await SeedSelectedSeatLocks(session.Id, new[] { seats[0].Id }, _staffUserId);
 
         var existingBooking = new Booking(Guid.NewGuid(), session.Id, 200, DateTime.UtcNow, BookingStatus.Confirmed);
-        var existingBookingSeat = new BookingSeat(existingBooking.Id, seats[0].Id);
+        var existingBookingSeat = new BookingSeat(existingBooking.Id, seats[0].Id, 200m);
         existingBooking.BookingSeats.Add(existingBookingSeat);
         DbContext.Bookings.Add(existingBooking);
         await DbContext.SaveChangesAsync(default);
@@ -152,7 +152,7 @@ public class CashierSaleConcurrencyTests : IntegrationTestBase
         await SeedSelectedSeatLocks(session.Id, seats.Select(s => s.Id), _staffUserId);
 
         var existingBooking = new Booking(Guid.NewGuid(), session.Id, 200, DateTime.UtcNow, BookingStatus.Confirmed);
-        var existingBookingSeat = new BookingSeat(existingBooking.Id, seats[1].Id);
+        var existingBookingSeat = new BookingSeat(existingBooking.Id, seats[1].Id, 200m);
         existingBooking.BookingSeats.Add(existingBookingSeat);
         DbContext.Bookings.Add(existingBooking);
         await DbContext.SaveChangesAsync(default);
