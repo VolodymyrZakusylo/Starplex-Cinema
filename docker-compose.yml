@@ -1,17 +1,20 @@
-version: '3.8'
-
 services:
   starplex-db:
     image: postgres:16-alpine
     container_name: starplex_postgres
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: super_secret_password_123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: starplex_db
     ports:
       - "5432:5432"
     volumes:
       - starplex_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d starplex_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   mailpit:
@@ -20,6 +23,39 @@ services:
     ports:
       - "1025:1025"
       - "8025:8025"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: starplex_api
+    ports:
+      - "5108:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - ConnectionStrings__DefaultConnection=Host=starplex-db;Port=5432;Database=starplex_db;Username=postgres;Password=${POSTGRES_PASSWORD}
+      - EmailSettings__SmtpHost=mailpit
+      - EmailSettings__SmtpPort=1025
+      - EmailSettings__FromEmail=noreply@starplex.com
+      - EmailSettings__FromName=StarPlex Cinema
+      - JwtSettings__Secret=${JWT_SECRET}
+      - JwtSettings__Issuer=StarPlex.API
+      - JwtSettings__Audience=StarPlex.Client
+      - JwtSettings__ExpiryInMinutes=60
+      - TmdbSettings__ApiKey=${TMDB_API_KEY}
+      - TmdbSettings__BaseUrl=https://api.themoviedb.org/3/
+      - StripeSettings__SecretKey=${STRIPE_SECRET_KEY}
+      - StripeSettings__PublishableKey=${STRIPE_PUBLISHABLE_KEY}
+      - StripeSettings__WebhookSecret=${STRIPE_WEBHOOK_SECRET}
+      - SeedSettings__AdminEmail=${SEED_ADMIN_EMAIL}
+      - SeedSettings__AdminPassword=${SEED_ADMIN_PASSWORD}
+    depends_on:
+      starplex-db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
