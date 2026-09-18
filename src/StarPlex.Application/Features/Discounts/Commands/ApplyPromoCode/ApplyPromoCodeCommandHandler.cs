@@ -25,6 +25,16 @@ public class ApplyPromoCodeCommandHandler : IRequestHandler<ApplyPromoCodeComman
 
     public async Task<PromoCodeResultDto> Handle(ApplyPromoCodeCommand request, CancellationToken cancellationToken)
     {
+        if (_context is not DbContext dbContext)
+            return new PromoCodeResultDto { IsSuccess = false, Message = "Database context error." };
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        if (dbContext.Database.ProviderName?.Contains("Npgsql") == true)
+        {
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Bookings\" WHERE \"Id\" = {request.BookingId} FOR UPDATE", cancellationToken);
+        }
+
         var booking = await _context.Bookings
             .Include(b => b.Discount)
             .Include(b => b.Payment)
@@ -34,6 +44,9 @@ public class ApplyPromoCodeCommandHandler : IRequestHandler<ApplyPromoCodeComman
 
         if (booking == null)
             return new PromoCodeResultDto { IsSuccess = false, Message = "Booking not found." };
+
+        if (request.UserId == Guid.Empty || booking.UserId != request.UserId)
+            return new PromoCodeResultDto { IsSuccess = false, Message = "You do not have permission to modify this booking." };
 
         if (booking.Status != BookingStatus.Pending)
             return new PromoCodeResultDto { IsSuccess = false, Message = "Promo code can only be applied to a pending booking." };
@@ -112,6 +125,7 @@ public class ApplyPromoCodeCommandHandler : IRequestHandler<ApplyPromoCodeComman
         try
         {
             await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (Exception ex)
         {

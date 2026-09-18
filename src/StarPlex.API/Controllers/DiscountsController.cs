@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -38,6 +40,10 @@ public class DiscountsController : ControllerBase
     [HttpPost("apply")]
     public async Task<ActionResult<PromoCodeResultDto>> ApplyPromoCode([FromBody] ApplyPromoCodeCommand command)
     {
+        var userId = GetCurrentUserId();
+        if (userId == null) return Unauthorized(new { Message = "User ID could not be determined." });
+
+        command.UserId = userId.Value;
         var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
@@ -46,6 +52,14 @@ public class DiscountsController : ControllerBase
         }
 
         return Ok(result);
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                    ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+
+        return Guid.TryParse(claim, out var id) ? id : null;
     }
 
     [HttpGet]

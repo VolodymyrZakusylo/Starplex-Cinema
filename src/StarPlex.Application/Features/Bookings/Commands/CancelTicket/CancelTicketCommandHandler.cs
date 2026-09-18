@@ -68,7 +68,7 @@ public class CancelTicketCommandHandler : IRequestHandler<CancelTicketCommand, b
         if (dbContext.Database.ProviderName?.Contains("Npgsql") == true)
         {
             await dbContext.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT 1 FROM \"Tickets\" WHERE \"Id\" = {request.TicketId} FOR UPDATE", cancellationToken);
+                $"SELECT 1 FROM \"Bookings\" WHERE \"Id\" = {booking.Id} FOR UPDATE", cancellationToken);
         }
 
         var ticketToCancel = await _context.Tickets
