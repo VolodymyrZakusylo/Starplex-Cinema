@@ -51,6 +51,15 @@ services:
       - StripeSettings__WebhookSecret=${STRIPE_WEBHOOK_SECRET}
       - SeedSettings__AdminEmail=${SEED_ADMIN_EMAIL}
       - SeedSettings__AdminPassword=${SEED_ADMIN_PASSWORD}
+    volumes:
+      - starplex_dp_keys:/app/dp_keys
+      - starplex_uploads:/app/wwwroot/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     depends_on:
       starplex-db:
         condition: service_healthy
@@ -69,8 +78,10 @@ services:
       - "3000:80"
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   starplex_pg_data:
+  starplex_dp_keys:
+  starplex_uploads:
