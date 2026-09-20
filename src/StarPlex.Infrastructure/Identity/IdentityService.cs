@@ -94,14 +94,20 @@ public class IdentityService : IIdentityService
 
     public async Task<AuthResponse?> RefreshTokenAsync(string refreshTokenStr, CancellationToken cancellationToken = default)
     {
+        var hashedToken = HashRefreshToken(refreshTokenStr);
         var storedToken = await _context.RefreshTokens
-            .FirstOrDefaultAsync(x => x.Token == refreshTokenStr, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Token == hashedToken, cancellationToken);
 
         if (storedToken == null || !storedToken.IsActive)
             return null;
 
-        storedToken.IsRevoked = true;
-        await _context.SaveChangesAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+        var rowsRevoked = await _context.RefreshTokens
+            .Where(x => x.Id == storedToken.Id && !x.IsRevoked && x.ExpiresAt > now)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.IsRevoked, true), cancellationToken);
+
+        if (rowsRevoked == 0)
+            return null;
 
         var user = await _userManager.FindByIdAsync(storedToken.UserId.ToString());
         if (user == null) return null;
@@ -111,8 +117,9 @@ public class IdentityService : IIdentityService
 
     public async Task<bool> RevokeTokenAsync(string refreshTokenStr, CancellationToken cancellationToken = default)
     {
+        var hashedToken = HashRefreshToken(refreshTokenStr);
         var storedToken = await _context.RefreshTokens
-            .FirstOrDefaultAsync(x => x.Token == refreshTokenStr, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Token == hashedToken, cancellationToken);
 
         if (storedToken == null) return false;
 
@@ -334,8 +341,9 @@ public class IdentityService : IIdentityService
         var accessTokenStr = tokenHandler.WriteToken(securityToken);
 
         var refreshTokenStr = GenerateSecureRefreshTokenString();
+        var hashedToken = HashRefreshToken(refreshTokenStr);
 
-        var refreshTokenEntity = new RefreshToken(user.Id, refreshTokenStr, DateTime.UtcNow.AddDays(7));
+        var refreshTokenEntity = new RefreshToken(user.Id, hashedToken, DateTime.UtcNow.AddDays(7));
 
         _context.RefreshTokens.Add(refreshTokenEntity);
         await _context.SaveChangesAsync(cancellationToken);
@@ -360,5 +368,12 @@ public class IdentityService : IIdentityService
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(randomNumber);
         return Convert.ToBase64String(randomNumber);
+    }
+
+    private static string HashRefreshToken(string rawToken)
+    {
+        var bytes = Encoding.UTF8.GetBytes(rawToken);
+        var hashBytes = SHA256.HashData(bytes);
+        return Convert.ToBase64String(hashBytes);
     }
 }
