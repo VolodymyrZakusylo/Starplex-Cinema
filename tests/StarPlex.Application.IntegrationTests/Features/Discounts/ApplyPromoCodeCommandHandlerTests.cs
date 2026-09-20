@@ -512,4 +512,76 @@ public class ApplyPromoCodeCommandHandlerTests : IntegrationTestBase
             dbTickets.Should().BeEmpty();
         }
     }
+    [Fact]
+    public async Task ApplyPromoCode_ConcurrentPromoApplicationsOnDifferentBookings_RespectsUsageLimit()
+    {
+        var userId1 = Guid.NewGuid();
+        var userId2 = Guid.NewGuid();
+
+        var cinema = new Cinema("StarPlex", "Main St 1", "Kyiv");
+        DbContext.Cinemas.Add(cinema);
+        var hall = new Hall(cinema.Id, "Main Hall", 10, 10);
+        DbContext.Halls.Add(hall);
+        var seat1 = new Seat(hall.Id, "1", 1, SeatType.Standard);
+        var seat2 = new Seat(hall.Id, "1", 2, SeatType.Standard);
+        DbContext.Seats.AddRange(seat1, seat2);
+        var movie = new Movie(12345, "Inception", "Inception", "A thief...", 120, "poster.jpg", "backdrop.jpg", "Sci-Fi", "url", "PG-13", 8.8, MovieStatus.NowShowing, DateTime.UtcNow);
+        DbContext.Movies.Add(movie);
+        var session = new Session(movie.Id, hall.Id, DateTime.UtcNow.AddDays(1), 120, 100, 200, SessionStatus.Active);
+        DbContext.Sessions.Add(session);
+
+        var discount = new Discount
+        {
+            Code = "LIMITED1",
+            Name = "Limited 1",
+            Percentage = 10,
+            ValidFrom = DateTime.UtcNow.AddDays(-1),
+            ValidTo = DateTime.UtcNow.AddDays(10),
+            IsActive = true,
+            UsageLimit = 1,
+            UsageCount = 0
+        };
+        DbContext.Discounts.Add(discount);
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+
+        var booking1 = new Booking(userId1, session.Id, 200m, DateTime.UtcNow, BookingStatus.Pending) { Id = Guid.NewGuid() };
+        var bs1 = new BookingSeat(booking1.Id, seat1.Id, 200m) { Id = Guid.NewGuid() };
+        booking1.BookingSeats.Add(bs1);
+        DbContext.Bookings.Add(booking1);
+        var payment1 = new Payment(booking1.Id, "pi_limit_1", 200m, PaymentStatus.Pending);
+        DbContext.Payments.Add(payment1);
+
+        var booking2 = new Booking(userId2, session.Id, 200m, DateTime.UtcNow, BookingStatus.Pending) { Id = Guid.NewGuid() };
+        var bs2 = new BookingSeat(booking2.Id, seat2.Id, 200m) { Id = Guid.NewGuid() };
+        booking2.BookingSeats.Add(bs2);
+        DbContext.Bookings.Add(booking2);
+        var payment2 = new Payment(booking2.Id, "pi_limit_2", 200m, PaymentStatus.Pending);
+        DbContext.Payments.Add(payment2);
+
+        await DbContext.SaveChangesAsync(CancellationToken.None);
+
+        PaymentServiceMock
+            .Setup(p => p.UpdatePaymentIntentAmountAsync(It.IsAny<string>(), It.IsAny<decimal>(), "uah", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        using var scope1 = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.CreateScope(ServiceProvider);
+        using var scope2 = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.CreateScope(ServiceProvider);
+        var mediator1 = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<IMediator>(scope1.ServiceProvider);
+        var mediator2 = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<IMediator>(scope2.ServiceProvider);
+
+        var cmd1 = new ApplyPromoCodeCommand { BookingId = booking1.Id, PromoCode = "LIMITED1", UserId = userId1 };
+        var cmd2 = new ApplyPromoCodeCommand { BookingId = booking2.Id, PromoCode = "LIMITED1", UserId = userId2 };
+
+        var task1 = mediator1.Send(cmd1);
+        var task2 = mediator2.Send(cmd2);
+
+        var results = await Task.WhenAll(task1, task2);
+
+        results.Count(r => r.IsSuccess).Should().Be(1);
+        results.Count(r => !r.IsSuccess).Should().Be(1);
+        results.Single(r => !r.IsSuccess).Message.Should().Contain("usage limit");
+
+        var dbDiscount = await DbContext.Discounts.AsNoTracking().FirstOrDefaultAsync(d => d.Id == discount.Id);
+        dbDiscount!.UsageCount.Should().Be(1);
+    }
 }

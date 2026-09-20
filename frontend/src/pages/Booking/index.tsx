@@ -105,10 +105,13 @@ export const BookingPage: React.FC = () => {
 
         let isMounted = true;
         const connection = new HubConnectionBuilder()
-            .withUrl('/hub/seats')
+            .withUrl('/hub/seats', {
+                accessTokenFactory: () => localStorage.getItem('token') ?? '',
+            })
             .withAutomaticReconnect()
             .configureLogging(LogLevel.Information)
             .build();
+
 
         const startConnection = async () => {
             try {
