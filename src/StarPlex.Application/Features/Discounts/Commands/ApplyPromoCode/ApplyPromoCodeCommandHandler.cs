@@ -63,6 +63,12 @@ public class ApplyPromoCodeCommandHandler : IRequestHandler<ApplyPromoCodeComman
         if (discount == null || !discount.IsActive)
             return new PromoCodeResultDto { IsSuccess = false, Message = "This promo code does not exist or is inactive." };
 
+        if (dbContext.Database.ProviderName?.Contains("Npgsql") == true)
+        {
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Discounts\" WHERE \"Id\" = {discount.Id} FOR UPDATE", cancellationToken);
+            await dbContext.Entry(discount).ReloadAsync(cancellationToken);
+        }
+
         var now = DateTime.UtcNow;
         if (now < discount.ValidFrom || now > discount.ValidTo)
             return new PromoCodeResultDto { IsSuccess = false, Message = "This promo code has expired or is not yet active." };

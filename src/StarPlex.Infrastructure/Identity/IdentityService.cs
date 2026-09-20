@@ -81,12 +81,21 @@ public class IdentityService : IIdentityService
             return null;
         }
 
+        if (await _userManager.IsLockedOutAsync(user))
+        {
+            _logger.LogWarning("Failed login attempt for user {UserId}: account is locked out", user.Id);
+            return null; // Return same generic failure as invalid credentials
+        }
+
         var isPasswordValid = await _userManager.CheckPasswordAsync(user, password);
         if (!isPasswordValid)
         {
+            await _userManager.AccessFailedAsync(user);
             _logger.LogWarning("Failed login attempt for user {UserId}: invalid password", user.Id);
             return null;
         }
+
+        await _userManager.ResetAccessFailedCountAsync(user);
 
         _logger.LogInformation("Successful login for user {UserId}", user.Id);
         return await GenerateAuthResponseAsync(user, cancellationToken);
