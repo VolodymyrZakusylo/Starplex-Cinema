@@ -43,8 +43,9 @@ public class UpdateMovieCommandHandler : IRequestHandler<UpdateMovieCommand>
 
         if (request.PosterFileStream != null && !string.IsNullOrEmpty(request.PosterFileName))
         {
+            var safeExtension = await StarPlex.Application.Common.Helpers.ImageValidator.ValidateAndGetSafeExtensionAsync(request.PosterFileStream, request.PosterFileName);
             var folderPath = "uploads/posters";
-            var uniqueFileName = $"{Guid.NewGuid()}_{request.PosterFileName}";
+            var uniqueFileName = $"{Guid.NewGuid()}{safeExtension}";
 
             var savedPath = await _fileStorageService.SaveFileAsync(request.PosterFileStream, folderPath, uniqueFileName, cancellationToken);
             movie.PosterStoragePath = savedPath;
