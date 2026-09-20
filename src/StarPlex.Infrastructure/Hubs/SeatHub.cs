@@ -1,8 +1,10 @@
-﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
 namespace StarPlex.Infrastructure.Hubs;
 
+[Authorize]
 public class SeatHub : Hub
 {
     private readonly ILogger<SeatHub> _logger;
@@ -24,19 +26,5 @@ public class SeatHub : Hub
         var groupName = $"session_{sessionId}";
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
         _logger.LogInformation("Client {ConnectionId} left room {GroupName}", Context.ConnectionId, groupName);
-    }
-
-    public async Task SeatLocked(Guid sessionId, Guid seatId, Guid userId)
-    {
-        var groupName = $"session_{sessionId}";
-        await Clients.OthersInGroup(groupName).SendAsync("OnSeatLocked", seatId, userId);
-        _logger.LogInformation("Seat {SeatId} locked in session {SessionId} by user {UserId}", seatId, sessionId, userId);
-    }
-
-    public async Task SeatUnlocked(Guid sessionId, Guid seatId)
-    {
-        var groupName = $"session_{sessionId}";
-        await Clients.OthersInGroup(groupName).SendAsync("OnSeatUnlocked", seatId);
-        _logger.LogInformation("Seat {SeatId} unlocked in session {SessionId}", seatId, sessionId);
     }
 }
