@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Common.Models;
 using StarPlex.Infrastructure.Authentication;
+using StarPlex.Infrastructure.Configuration;
 using StarPlex.Infrastructure.Identity;
 using StarPlex.Infrastructure.Persistence;
 using StarPlex.Infrastructure.Services;
@@ -103,7 +104,49 @@ public static class DependencyInjection
 
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<ISeatLockService, PostgresSeatLockService>();
-        services.AddScoped<IFileStorageService, LocalFileStorageService>();
+        var storageSettingsSection = configuration.GetSection(StorageSettings.SectionName);
+        services.Configure<StorageSettings>(storageSettingsSection);
+        var storageSettings = storageSettingsSection.Get<StorageSettings>() ?? new StorageSettings();
+
+        if (storageSettings.Provider.Equals("AzureBlob", StringComparison.OrdinalIgnoreCase))
+        {
+            var azureBlobSection = configuration.GetSection(AzureBlobStorageSettings.SectionName);
+            services.Configure<AzureBlobStorageSettings>(azureBlobSection);
+            var azureSettings = azureBlobSection.Get<AzureBlobStorageSettings>();
+
+            if (azureSettings == null || string.IsNullOrWhiteSpace(azureSettings.ServiceUri) || string.IsNullOrWhiteSpace(azureSettings.ContainerName))
+            {
+                throw new InvalidOperationException("AzureBlobStorage configuration is invalid or missing.");
+            }
+
+            if (!Uri.TryCreate(azureSettings.ServiceUri, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            {
+                throw new InvalidOperationException("AzureBlobStorage ServiceUri must be a valid absolute HTTPS URI.");
+            }
+
+            services.AddSingleton(provider =>
+            {
+                var credentialOptions = new Azure.Identity.DefaultAzureCredentialOptions();
+                if (!string.IsNullOrWhiteSpace(azureSettings.ManagedIdentityClientId))
+                {
+                    credentialOptions.ManagedIdentityClientId = azureSettings.ManagedIdentityClientId;
+                }
+
+                return new Azure.Storage.Blobs.BlobServiceClient(
+                    uri,
+                    new Azure.Identity.DefaultAzureCredential(credentialOptions));
+            });
+
+            services.AddScoped<IFileStorageService, AzureBlobFileStorageService>();
+        }
+        else if (storageSettings.Provider.Equals("Local", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddScoped<IFileStorageService, LocalFileStorageService>();
+        }
+        else
+        {
+            throw new InvalidOperationException($"Invalid file storage provider: {storageSettings.Provider}. Supported providers: Local, AzureBlob.");
+        }
 
         services.AddHostedService<ExpiredLocksCleanupService>();
         services.AddHostedService<AuditLogCleanupService>();
