@@ -164,11 +164,65 @@ public static class DependencyInjection
         services.AddScoped<ITicketService, TicketService>();
 
         services.AddScoped<IUserService, UserService>();
+        services.AddInfrastructureEmail(configuration);
+
+        return services;
+    }
+
+    public static IServiceCollection AddInfrastructureEmail(this IServiceCollection services, IConfiguration configuration)
+    {
+        var emailSettingsSection = configuration.GetSection("EmailSettings");
         services.AddOptions<EmailSettings>()
-            .Bind(configuration.GetSection("EmailSettings"))
+            .Bind(emailSettingsSection)
             .ValidateDataAnnotations()
             .ValidateOnStart();
-        services.AddScoped<IEmailService, EmailService>();
+
+        var emailSettings = emailSettingsSection.Get<EmailSettings>() ?? new EmailSettings();
+
+        if (emailSettings.Provider.Equals("Azure", StringComparison.OrdinalIgnoreCase))
+        {
+            var azureEmailSection = configuration.GetSection(AzureEmailSettings.SectionName);
+            services.Configure<AzureEmailSettings>(azureEmailSection);
+            var azureEmailSettings = azureEmailSection.Get<AzureEmailSettings>() ?? new AzureEmailSettings();
+
+            if (string.IsNullOrWhiteSpace(azureEmailSettings.Endpoint) || !Uri.TryCreate(azureEmailSettings.Endpoint, UriKind.Absolute, out var endpointUri) || endpointUri.Scheme != Uri.UriSchemeHttps)
+                throw new InvalidOperationException("AzureEmail Endpoint must be a valid absolute HTTPS URI.");
+
+            if (!string.IsNullOrEmpty(endpointUri.Query) || !string.IsNullOrEmpty(endpointUri.Fragment))
+                throw new InvalidOperationException("AzureEmail Endpoint must not contain a query string or fragment.");
+
+            if (string.IsNullOrWhiteSpace(azureEmailSettings.SenderAddress) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(azureEmailSettings.SenderAddress))
+                throw new InvalidOperationException("AzureEmail SenderAddress must be a valid email address.");
+
+            if (string.IsNullOrWhiteSpace(azureEmailSettings.ManagedIdentityClientId) || !Guid.TryParse(azureEmailSettings.ManagedIdentityClientId, out _))
+                throw new InvalidOperationException("AzureEmail ManagedIdentityClientId must be a valid GUID.");
+
+            services.AddSingleton<Azure.Communication.Email.EmailClient>(provider =>
+            {
+                var managedIdentityId = Azure.Identity.ManagedIdentityId.FromUserAssignedClientId(azureEmailSettings.ManagedIdentityClientId);
+                var credential = new Azure.Identity.ManagedIdentityCredential(managedIdentityId);
+                return new Azure.Communication.Email.EmailClient(endpointUri, credential);
+            });
+
+            services.AddScoped<IEmailService, AzureEmailService>();
+        }
+        else if (emailSettings.Provider.Equals("Smtp", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(emailSettings.SmtpHost))
+                throw new InvalidOperationException("EmailSettings SmtpHost is required when Provider is Smtp.");
+
+            if (emailSettings.SmtpPort < 1 || emailSettings.SmtpPort > 65535)
+                throw new InvalidOperationException("EmailSettings SmtpPort must be between 1 and 65535.");
+
+            if (string.IsNullOrWhiteSpace(emailSettings.FromEmail) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(emailSettings.FromEmail))
+                throw new InvalidOperationException("EmailSettings FromEmail must be a valid email address when Provider is Smtp.");
+
+            services.AddScoped<IEmailService, EmailService>();
+        }
+        else
+        {
+            throw new InvalidOperationException($"Invalid Email provider: {emailSettings.Provider}");
+        }
 
         return services;
     }
