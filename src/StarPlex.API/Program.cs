@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.OpenApi.Models;
 using QuestPDF.Infrastructure;
@@ -12,12 +11,11 @@ var builder = WebApplication.CreateBuilder(args);
 QuestPDF.Settings.License = LicenseType.Community;
 
 builder.Services.AddInfrastructureServices(builder.Configuration);
+builder.Services.AddInfrastructureDataProtection(builder.Configuration, builder.Environment.ContentRootPath);
 builder.Services.AddApplicationServices();
 builder.Services.AddSignalR();
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "dp_keys")));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
