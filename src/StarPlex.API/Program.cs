@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using StarPlex.API;
 using Microsoft.OpenApi.Models;
 using QuestPDF.Infrastructure;
 using StarPlex.Application;
@@ -12,6 +13,7 @@ QuestPDF.Settings.License = LicenseType.Community;
 
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddInfrastructureDataProtection(builder.Configuration, builder.Environment.ContentRootPath);
+builder.Services.AddStarPlexObservability(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddSignalR();
 builder.Services.AddControllers();
