@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -7,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using StarPlex.Application.Common.Interfaces;
 using StarPlex.Application.Common.Models;
 using StarPlex.Infrastructure.Authentication;
+using StarPlex.Infrastructure.Configuration;
 using StarPlex.Infrastructure.Identity;
 using StarPlex.Infrastructure.Persistence;
 using StarPlex.Infrastructure.Services;
@@ -103,7 +105,49 @@ public static class DependencyInjection
 
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<ISeatLockService, PostgresSeatLockService>();
-        services.AddScoped<IFileStorageService, LocalFileStorageService>();
+        var storageSettingsSection = configuration.GetSection(StorageSettings.SectionName);
+        services.Configure<StorageSettings>(storageSettingsSection);
+        var storageSettings = storageSettingsSection.Get<StorageSettings>() ?? new StorageSettings();
+
+        if (storageSettings.Provider.Equals("AzureBlob", StringComparison.OrdinalIgnoreCase))
+        {
+            var azureBlobSection = configuration.GetSection(AzureBlobStorageSettings.SectionName);
+            services.Configure<AzureBlobStorageSettings>(azureBlobSection);
+            var azureSettings = azureBlobSection.Get<AzureBlobStorageSettings>();
+
+            if (azureSettings == null || string.IsNullOrWhiteSpace(azureSettings.ServiceUri) || string.IsNullOrWhiteSpace(azureSettings.ContainerName))
+            {
+                throw new InvalidOperationException("AzureBlobStorage configuration is invalid or missing.");
+            }
+
+            if (!Uri.TryCreate(azureSettings.ServiceUri, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            {
+                throw new InvalidOperationException("AzureBlobStorage ServiceUri must be a valid absolute HTTPS URI.");
+            }
+
+            services.AddSingleton(provider =>
+            {
+                var credentialOptions = new Azure.Identity.DefaultAzureCredentialOptions();
+                if (!string.IsNullOrWhiteSpace(azureSettings.ManagedIdentityClientId))
+                {
+                    credentialOptions.ManagedIdentityClientId = azureSettings.ManagedIdentityClientId;
+                }
+
+                return new Azure.Storage.Blobs.BlobServiceClient(
+                    uri,
+                    new Azure.Identity.DefaultAzureCredential(credentialOptions));
+            });
+
+            services.AddScoped<IFileStorageService, AzureBlobFileStorageService>();
+        }
+        else if (storageSettings.Provider.Equals("Local", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddScoped<IFileStorageService, LocalFileStorageService>();
+        }
+        else
+        {
+            throw new InvalidOperationException($"Invalid file storage provider: {storageSettings.Provider}. Supported providers: Local, AzureBlob.");
+        }
 
         services.AddHostedService<ExpiredLocksCleanupService>();
         services.AddHostedService<AuditLogCleanupService>();
@@ -120,11 +164,122 @@ public static class DependencyInjection
         services.AddScoped<ITicketService, TicketService>();
 
         services.AddScoped<IUserService, UserService>();
+        services.AddInfrastructureEmail(configuration);
+
+        return services;
+    }
+
+    public static IServiceCollection AddInfrastructureEmail(this IServiceCollection services, IConfiguration configuration)
+    {
+        var emailSettingsSection = configuration.GetSection("EmailSettings");
         services.AddOptions<EmailSettings>()
-            .Bind(configuration.GetSection("EmailSettings"))
+            .Bind(emailSettingsSection)
             .ValidateDataAnnotations()
             .ValidateOnStart();
-        services.AddScoped<IEmailService, EmailService>();
+
+        var emailSettings = emailSettingsSection.Get<EmailSettings>() ?? new EmailSettings();
+
+        if (emailSettings.Provider.Equals("Azure", StringComparison.OrdinalIgnoreCase))
+        {
+            var azureEmailSection = configuration.GetSection(AzureEmailSettings.SectionName);
+            services.Configure<AzureEmailSettings>(azureEmailSection);
+            var azureEmailSettings = azureEmailSection.Get<AzureEmailSettings>() ?? new AzureEmailSettings();
+
+            if (string.IsNullOrWhiteSpace(azureEmailSettings.Endpoint) || !Uri.TryCreate(azureEmailSettings.Endpoint, UriKind.Absolute, out var endpointUri) || endpointUri.Scheme != Uri.UriSchemeHttps)
+                throw new InvalidOperationException("AzureEmail Endpoint must be a valid absolute HTTPS URI.");
+
+            if (!string.IsNullOrEmpty(endpointUri.Query) || !string.IsNullOrEmpty(endpointUri.Fragment))
+                throw new InvalidOperationException("AzureEmail Endpoint must not contain a query string or fragment.");
+
+            if (string.IsNullOrWhiteSpace(azureEmailSettings.SenderAddress) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(azureEmailSettings.SenderAddress))
+                throw new InvalidOperationException("AzureEmail SenderAddress must be a valid email address.");
+
+            if (string.IsNullOrWhiteSpace(azureEmailSettings.ManagedIdentityClientId) || !Guid.TryParse(azureEmailSettings.ManagedIdentityClientId, out _))
+                throw new InvalidOperationException("AzureEmail ManagedIdentityClientId must be a valid GUID.");
+
+            services.AddSingleton<Azure.Communication.Email.EmailClient>(provider =>
+            {
+                var managedIdentityId = Azure.Identity.ManagedIdentityId.FromUserAssignedClientId(azureEmailSettings.ManagedIdentityClientId);
+                var credential = new Azure.Identity.ManagedIdentityCredential(managedIdentityId);
+                return new Azure.Communication.Email.EmailClient(endpointUri, credential);
+            });
+
+            services.AddScoped<IEmailService, AzureEmailService>();
+        }
+        else if (emailSettings.Provider.Equals("Smtp", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(emailSettings.SmtpHost))
+                throw new InvalidOperationException("EmailSettings SmtpHost is required when Provider is Smtp.");
+
+            if (emailSettings.SmtpPort < 1 || emailSettings.SmtpPort > 65535)
+                throw new InvalidOperationException("EmailSettings SmtpPort must be between 1 and 65535.");
+
+            if (string.IsNullOrWhiteSpace(emailSettings.FromEmail) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(emailSettings.FromEmail))
+                throw new InvalidOperationException("EmailSettings FromEmail must be a valid email address when Provider is Smtp.");
+
+            services.AddScoped<IEmailService, EmailService>();
+        }
+        else
+        {
+            throw new InvalidOperationException($"Invalid Email provider: {emailSettings.Provider}");
+        }
+
+        return services;
+    }
+
+    public static IServiceCollection AddInfrastructureDataProtection(this IServiceCollection services, IConfiguration configuration, string contentRootPath)
+    {
+        var section = configuration.GetSection(DataProtectionSettings.SectionName);
+        services.Configure<DataProtectionSettings>(section);
+        var settings = section.Get<DataProtectionSettings>() ?? new DataProtectionSettings();
+
+        if (string.IsNullOrWhiteSpace(settings.ApplicationName))
+        {
+            throw new InvalidOperationException("DataProtection ApplicationName must not be empty or whitespace.");
+        }
+
+        var dpBuilder = Microsoft.Extensions.DependencyInjection.DataProtectionServiceCollectionExtensions.AddDataProtection(services)
+            .SetApplicationName(settings.ApplicationName);
+
+        if (settings.Provider.Equals("Azure", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(settings.BlobUri))
+                throw new InvalidOperationException("DataProtection BlobUri is required when Provider is Azure.");
+
+            if (!Uri.TryCreate(settings.BlobUri, UriKind.Absolute, out var blobUri) || blobUri.Scheme != Uri.UriSchemeHttps)
+                throw new InvalidOperationException("DataProtection BlobUri must be a valid absolute HTTPS URI.");
+            if (!string.IsNullOrEmpty(blobUri.Query) || !string.IsNullOrEmpty(blobUri.Fragment))
+                throw new InvalidOperationException("DataProtection BlobUri must not contain a query string or fragment.");
+            if (blobUri.Segments.Length < 3 || blobUri.Segments[^1].EndsWith('/'))
+                throw new InvalidOperationException("DataProtection BlobUri must point to a concrete blob, not merely a storage account or container root.");
+
+            if (string.IsNullOrWhiteSpace(settings.KeyIdentifier))
+                throw new InvalidOperationException("DataProtection KeyIdentifier is required when Provider is Azure.");
+
+            if (!Uri.TryCreate(settings.KeyIdentifier, UriKind.Absolute, out var keyUri) || keyUri.Scheme != Uri.UriSchemeHttps)
+                throw new InvalidOperationException("DataProtection KeyIdentifier must be a valid absolute HTTPS URI.");
+            if (!string.IsNullOrEmpty(keyUri.Query) || !string.IsNullOrEmpty(keyUri.Fragment))
+                throw new InvalidOperationException("DataProtection KeyIdentifier must not contain a query string or fragment.");
+            if (keyUri.Segments.Length != 3 || !keyUri.Segments[1].TrimEnd('/').Equals("keys", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("DataProtection KeyIdentifier must be a versionless Key Vault key URI.");
+
+            if (string.IsNullOrWhiteSpace(settings.ManagedIdentityClientId) || !Guid.TryParse(settings.ManagedIdentityClientId, out _))
+                throw new InvalidOperationException("DataProtection ManagedIdentityClientId must be a valid GUID when Provider is Azure.");
+
+            var managedIdentityId = Azure.Identity.ManagedIdentityId.FromUserAssignedClientId(settings.ManagedIdentityClientId);
+            var credential = new Azure.Identity.ManagedIdentityCredential(managedIdentityId);
+
+            dpBuilder.PersistKeysToAzureBlobStorage(blobUri, credential)
+                     .ProtectKeysWithAzureKeyVault(keyUri, credential);
+        }
+        else if (settings.Provider.Equals("FileSystem", StringComparison.OrdinalIgnoreCase))
+        {
+            dpBuilder.PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(contentRootPath, "dp_keys")));
+        }
+        else
+        {
+            throw new InvalidOperationException($"Invalid DataProtection provider: {settings.Provider}. Supported providers: FileSystem, Azure.");
+        }
 
         return services;
     }

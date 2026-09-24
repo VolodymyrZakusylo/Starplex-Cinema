@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using StarPlex.API;
 using Microsoft.OpenApi.Models;
 using QuestPDF.Infrastructure;
 using StarPlex.Application;
@@ -12,12 +12,12 @@ var builder = WebApplication.CreateBuilder(args);
 QuestPDF.Settings.License = LicenseType.Community;
 
 builder.Services.AddInfrastructureServices(builder.Configuration);
+builder.Services.AddInfrastructureDataProtection(builder.Configuration, builder.Environment.ContentRootPath);
+builder.Services.AddStarPlexObservability(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddSignalR();
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "dp_keys")));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -49,16 +49,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("SignalRPolicy", policy =>
-    {
-        policy.WithOrigins("http://localhost:5173")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
-});
+builder.Services.AddStarPlexCors(builder.Configuration);
 
 var app = builder.Build();
 
@@ -103,3 +94,5 @@ app.MapHub<SeatHub>("/hub/seats");
 app.MapHealthChecks("/health");
 
 app.Run();
+
+public partial class Program { }

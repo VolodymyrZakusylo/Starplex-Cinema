@@ -1,0 +1,227 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate repository variables
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          VITE_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
+          VITE_STRIPE_PUBLIC_KEY: ${{ vars.VITE_STRIPE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$AZURE_CLIENT_ID" ] || \
+             [ -z "$AZURE_TENANT_ID" ] || \
+             [ -z "$AZURE_SUBSCRIPTION_ID" ] || \
+             [ -z "$VITE_BACKEND_URL" ] || \
+             [ -z "$VITE_STRIPE_PUBLIC_KEY" ]; then
+            echo "Error: One or more required repository variables are missing."
+            exit 1
+          fi
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login
+        run: az acr login --name acrstarplex
+
+      - name: Build and push Backend Image
+        run: |
+          docker build -t "acrstarplex.azurecr.io/starplex-api:${{ github.sha }}" .
+          docker push "acrstarplex.azurecr.io/starplex-api:${{ github.sha }}"
+
+      - name: Build and push Frontend Image
+        working-directory: frontend
+        env:
+          VITE_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
+          VITE_STRIPE_PUBLIC_KEY: ${{ vars.VITE_STRIPE_PUBLIC_KEY }}
+        run: |
+          docker build -t "acrstarplex.azurecr.io/starplex-web:${{ github.sha }}" \
+            --build-arg NGINX_CONFIG=nginx.prod.conf \
+            --build-arg VITE_BACKEND_URL="$VITE_BACKEND_URL" \
+            --build-arg VITE_STRIPE_PUBLIC_KEY="$VITE_STRIPE_PUBLIC_KEY" \
+            .
+
+          docker run --rm "acrstarplex.azurecr.io/starplex-web:${{ github.sha }}" cat /etc/nginx/conf.d/default.conf > nginx_config.txt || { echo "Failed to extract config"; exit 1; }
+          if grep -q "http://api:8080" nginx_config.txt; then
+            echo "Error: Production config contains http://api:8080"
+            exit 1
+          fi
+          docker run --rm "acrstarplex.azurecr.io/starplex-web:${{ github.sha }}" nginx -t || { echo "Nginx config test failed"; exit 1; }
+
+          docker push "acrstarplex.azurecr.io/starplex-web:${{ github.sha }}"
+
+      - name: Update Backend ACA
+        id: update_backend
+        run: |
+          UPDATE_OUT=$(az containerapp update \
+            --name starplex-api-dev \
+            --resource-group rg-starplex-dev \
+            --image "acrstarplex.azurecr.io/starplex-api:${{ github.sha }}" \
+            --output json)
+
+          REVISION=$(echo "$UPDATE_OUT" | jq -r '.properties.latestRevisionName')
+          if [ -z "$REVISION" ] || [ "$REVISION" = "null" ]; then
+             echo "Error: Could not extract latestRevisionName from update response."
+             exit 1
+          fi
+          echo "backend_revision=${REVISION}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Frontend ACA
+        id: update_frontend
+        run: |
+          UPDATE_OUT=$(az containerapp update \
+            --name starplex-web-dev \
+            --resource-group rg-starplex-dev \
+            --image "acrstarplex.azurecr.io/starplex-web:${{ github.sha }}" \
+            --output json)
+
+          REVISION=$(echo "$UPDATE_OUT" | jq -r '.properties.latestRevisionName')
+          if [ -z "$REVISION" ] || [ "$REVISION" = "null" ]; then
+             echo "Error: Could not extract latestRevisionName from update response."
+             exit 1
+          fi
+          echo "frontend_revision=${REVISION}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Deployments
+        env:
+          BACKEND_REV: ${{ steps.update_backend.outputs.backend_revision }}
+          FRONTEND_REV: ${{ steps.update_frontend.outputs.frontend_revision }}
+          EXPECTED_BE_IMAGE: "acrstarplex.azurecr.io/starplex-api:${{ github.sha }}"
+          EXPECTED_FE_IMAGE: "acrstarplex.azurecr.io/starplex-web:${{ github.sha }}"
+        run: |
+          verify_revision() {
+            local app=$1
+            local rev=$2
+            local expected_image=$3
+            echo "Verifying $app revision $rev..."
+
+            if [ -z "$rev" ]; then
+              echo "Error: empty revision for $app"
+              exit 1
+            fi
+
+            local rev_image
+            rev_image=$(az containerapp revision show -n "$app" -g rg-starplex-dev --revision "$rev" --query "properties.template.containers[0].image" -o tsv)
+            if [ "$rev_image" != "$expected_image" ]; then
+              echo "Error: Image mismatch for $app. Expected $expected_image, got $rev_image"
+              exit 1
+            fi
+
+            local end_time=$((SECONDS + 300))
+            while [ $SECONDS -lt $end_time ]; do
+              local prov_state
+              prov_state=$(az containerapp revision show -n "$app" -g rg-starplex-dev --revision "$rev" --query "properties.provisioningState" -o tsv)
+              local health_state
+              health_state=$(az containerapp revision show -n "$app" -g rg-starplex-dev --revision "$rev" --query "properties.healthState" -o tsv)
+
+              if [ "$prov_state" = "Failed" ]; then
+                echo "Error: Revision $rev failed to provision."
+                exit 1
+              fi
+
+              local app_json
+              app_json=$(az containerapp show -n "$app" -g rg-starplex-dev -o json)
+              local latest_ready
+              latest_ready=$(echo "$app_json" | jq -r '.properties.latestReadyRevisionName')
+
+              local is_routed
+              is_routed=$(echo "$app_json" | jq -e "
+                .properties.configuration.ingress.traffic | any(
+                  .weight > 0 and (
+                    (.latestRevision == true and \"$latest_ready\" == \"$rev\") or
+                    (.revisionName == \"$rev\")
+                  )
+                )
+              " > /dev/null && echo "true" || echo "false")
+
+              if [ "$prov_state" = "Provisioned" ] && [ "$health_state" = "Healthy" ] && [ "$is_routed" = "true" ]; then
+                echo "Success: $app revision $rev is healthy and routed."
+                return 0
+              fi
+
+              echo "Waiting for $app (Prov: $prov_state, Health: $health_state, Routed: $is_routed)..."
+              sleep 10
+            done
+            echo "Error: Timeout waiting for $app revision $rev to be ready and routed."
+            exit 1
+          }
+
+          verify_revision "starplex-api-dev" "$BACKEND_REV" "$EXPECTED_BE_IMAGE"
+          verify_revision "starplex-web-dev" "$FRONTEND_REV" "$EXPECTED_FE_IMAGE"
+
+          echo "Checking backend health..."
+          curl -s -f -m 10 --retry 3 --retry-connrefused "https://starplex-api-dev.redtree-9d789217.polandcentral.azurecontainerapps.io/health" || { echo "Backend HTTP check failed"; exit 1; }
+
+          echo "Checking frontend HTML..."
+          HTML=$(curl -s -f -m 10 --retry 3 --retry-connrefused "https://starplex-web-dev.redtree-9d789217.polandcentral.azurecontainerapps.io/") || { echo "Frontend HTTP check failed"; exit 1; }
+          echo "$HTML" | grep -q "StarPlex" || { echo "HTML validation failed"; exit 1; }
+
+          JS_ASSET=$(echo "$HTML" | grep -oP 'src="/assets/index-[^"]+\.js"' | head -n 1 | cut -d '"' -f 2)
+          if [ -z "$JS_ASSET" ]; then
+            echo "Error: No JS asset found in HTML"
+            exit 1
+          fi
+
+          echo "Checking JS asset $JS_ASSET..."
+          curl -s -f -m 10 --retry 3 --retry-connrefused "https://starplex-web-dev.redtree-9d789217.polandcentral.azurecontainerapps.io$JS_ASSET" -o temp_asset.js || { echo "JS Asset download failed"; exit 1; }
+
+          if grep -q -i "<html" temp_asset.js; then
+             echo "Error: JS asset is actually an HTML fallback."
+             rm temp_asset.js
+             exit 1
+          fi
+          rm temp_asset.js
+          echo "JS asset verified successfully."
+
+      - name: Generate Job Summary
+        if: always()
+        env:
+          DEPLOY_STATUS: ${{ job.status }}
+          EXPECTED_BE_IMAGE: acrstarplex.azurecr.io/starplex-api:${{ github.sha }}
+          EXPECTED_FE_IMAGE: acrstarplex.azurecr.io/starplex-web:${{ github.sha }}
+          BACKEND_REV: ${{ steps.update_backend.outputs.backend_revision }}
+          FRONTEND_REV: ${{ steps.update_frontend.outputs.frontend_revision }}
+        run: |
+          {
+            echo "### Deployment Summary"
+            echo "- **Status**: $DEPLOY_STATUS"
+            echo "- **Commit**: $GITHUB_SHA"
+            echo "- **Backend Image**: $EXPECTED_BE_IMAGE"
+            echo "- **Frontend Image**: $EXPECTED_FE_IMAGE"
+            echo "- **Backend Revision**: ${BACKEND_REV:-not created}"
+            echo "- **Frontend Revision**: ${FRONTEND_REV:-not created}"
+            echo "- **Backend URL**: https://starplex-api-dev.redtree-9d789217.polandcentral.azurecontainerapps.io"
+            echo "- **Frontend URL**: https://starplex-web-dev.redtree-9d789217.polandcentral.azurecontainerapps.io"
+          } >> "$GITHUB_STEP_SUMMARY"

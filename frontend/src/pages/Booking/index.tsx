@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { HubConnection, HubConnectionBuilder, LogLevel, HubConnectionState } from '@microsoft/signalr';
 import { useAuthStore } from '@/store/authStore';
 import { useToast } from '@/hooks/useToast';
+import { backendUrl } from '@/api/axios';
 import { bookingsApi } from '@/api/bookings';
 import { sessionsApi } from '@/api/sessions';
 import { discountsApi } from '@/api/discounts';
@@ -105,7 +106,7 @@ export const BookingPage: React.FC = () => {
 
         let isMounted = true;
         const connection = new HubConnectionBuilder()
-            .withUrl('/hub/seats', {
+            .withUrl(backendUrl ? `${backendUrl}/hub/seats` : '/hub/seats', {
                 accessTokenFactory: () => localStorage.getItem('token') ?? '',
             })
             .withAutomaticReconnect()
