@@ -10,6 +10,8 @@ It performs the following:
 - **Backend Job**: Sets up .NET SDK 8.0, restores dependencies, builds the solution in Release mode, and runs all integration and unit tests using Testcontainers (PostgreSQL). The TRX test results are uploaded as an artifact even if tests fail.
 - **Frontend Job**: Uses Node.js 22 to install dependencies, builds the Vite application, and builds the frontend Docker image using the production Nginx configuration. It explicitly verifies that the production image does not contain local Docker Compose proxies (e.g., `http://api:8080`).
 
+Note: GitHub Actions workflows run on the `ubuntu-24.04` runner. The GitHub Actions runner uses Node.js 24 internally for executing javascript actions, which is separate from the application's runtime (Node.js 22).
+
 No Azure credentials or backend secrets are required for these checks.
 
 ### Deployment (`deploy-dev.yml`)
@@ -33,7 +35,7 @@ The deployment workflow requires the following **Variables** (configured under S
 ## OIDC and RBAC Assumptions
 We use passwordless OIDC authentication to Azure. It is assumed that:
 - The managed identity `id-starplex-github-dev` exists.
-- The GitHub OIDC subject is strictly mapped to `repo:VolodymyrZakusylo/Starplex-Cinema:ref:refs/heads/main`.
+- The GitHub OIDC subject is strictly mapped to `repo:VolodymyrZakusylo@160287434/Starplex-Cinema@1315224546:ref:refs/heads/main`.
 - The identity has `AcrPush` role on the `acrstarplex` registry.
 - The identity has `Container Apps Contributor` role on both Azure Container Apps (`starplex-api-dev` and `starplex-web-dev`).
 
