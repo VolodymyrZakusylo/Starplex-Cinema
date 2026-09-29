@@ -10,6 +10,7 @@ import { discountsApi } from '@/api/discounts';
 
 import { SeatGrid } from './components/SeatGrid';
 import { OrderSidebar } from './components/OrderSidebar';
+import { CashierHistoryModal } from './components/CashierHistoryModal';
 
 import type { SeatMapDto, CashierSaleDto, SignalRSeatsLockedDto, SignalRSeatsReleasedDto } from '@/types/bookings';
 
@@ -40,8 +41,9 @@ export const BookingPage: React.FC = () => {
     const [lastBookingId, setLastBookingId] = useState<string | null>(null);
 
     const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
-    const [, setCashierSales] = useState<CashierSaleDto[]>([]);
+    const [cashierSales, setCashierSales] = useState<CashierSaleDto[]>([]);
     const [isSalesLoading, setIsSalesLoading] = useState<boolean>(false);
+    const [salesError, setSalesError] = useState<string | null>(null);
 
     const [promoCode, setPromoCode] = useState<string>('');
     const [discountPercentage, setDiscountPercentage] = useState<number>(0);
@@ -83,11 +85,12 @@ export const BookingPage: React.FC = () => {
     const fetchCashierSales = async () => {
         if (!isCashierMode) return;
         setIsSalesLoading(true);
+        setSalesError(null);
         try {
             const data = await bookingsApi.getCashierSales();
             setCashierSales(data);
         } catch (err) {
-            showError('Не вдалося отримати лог касової зміни.');
+            setSalesError('Не вдалося отримати лог касової зміни.');
         } finally {
             setIsSalesLoading(false);
         }
@@ -161,10 +164,10 @@ export const BookingPage: React.FC = () => {
 
         const isSelected = selectedSeats.some((s) => s.seatId === seat.seatId);
         try {
-            const isSuccess = isSelected 
+            const isSuccess = isSelected
                 ? await bookingsApi.unlockSeat(sessionId!, seat.seatId)
                 : await bookingsApi.lockSeat(sessionId!, seat.seatId);
-            
+
             if (isSuccess) {
                 if (isSelected) {
                     setSelectedSeats((p) => p.filter((s) => s.seatId !== seat.seatId));
@@ -216,7 +219,7 @@ export const BookingPage: React.FC = () => {
             );
             navigate(`/booking/payment?clientSecret=${res.clientSecret}`, { state: res });
         } catch (err: any) {
-            showError(err.response?.data?.Message || 'Не вдалося створити квитки.');
+            showError(err.response?.data?.detail || err.response?.data?.Message || err.response?.data?.message || 'Не вдалося створити квитки.');
         } finally {
             setIsSubmitting(false);
         }
@@ -278,9 +281,22 @@ export const BookingPage: React.FC = () => {
     }
 
     return (
-        <div className="w-full select-none grid grid-cols-1 lg:grid-cols-4 gap-8 items-start px-2 py-4">
-            <SeatGrid seats={seats} selectedSeats={selectedSeats} currentUserId={currentUserId} isCashierMode={isCashierMode} onSeatClick={handleSeatClick} onOpenHistory={() => setIsHistoryOpen(true)} isSalesLoading={isSalesLoading} />
-            <OrderSidebar selectedSeats={selectedSeats} basePrice={basePrice} isCashierMode={isCashierMode} promoCode={promoCode} setPromoCode={setPromoCode} promoError={promoError} promoSuccess={promoSuccess} isValidatingPromo={isValidatingPromo} discountPercentage={discountPercentage} cashierPaymentMethod={cashierPaymentMethod} setCashierPaymentMethod={setCashierPaymentMethod} isSubmitting={isSubmitting} lastBookingId={lastBookingId} onValidatePromo={handleValidatePromo} onCreateBooking={handleCreateBooking} onProcessCashierSale={handleProcessCashierSale} onTriggerPrint={triggerTicketPrint} />
-        </div>
+        <>
+            <div className="w-full select-none grid grid-cols-1 lg:grid-cols-4 gap-8 items-start px-2 py-4">
+                <SeatGrid seats={seats} selectedSeats={selectedSeats} currentUserId={currentUserId} isCashierMode={isCashierMode} onSeatClick={handleSeatClick} onOpenHistory={() => setIsHistoryOpen(true)} isSalesLoading={isSalesLoading} />
+                <OrderSidebar selectedSeats={selectedSeats} basePrice={basePrice} isCashierMode={isCashierMode} promoCode={promoCode} setPromoCode={setPromoCode} promoError={promoError} promoSuccess={promoSuccess} isValidatingPromo={isValidatingPromo} discountPercentage={discountPercentage} cashierPaymentMethod={cashierPaymentMethod} setCashierPaymentMethod={setCashierPaymentMethod} isSubmitting={isSubmitting} lastBookingId={lastBookingId} onValidatePromo={handleValidatePromo} onCreateBooking={handleCreateBooking} onProcessCashierSale={handleProcessCashierSale} onTriggerPrint={triggerTicketPrint} />
+            </div>
+
+            {isCashierMode && (
+                <CashierHistoryModal
+                    isOpen={isHistoryOpen}
+                    onClose={() => setIsHistoryOpen(false)}
+                    sales={cashierSales}
+                    isLoading={isSalesLoading}
+                    error={salesError}
+                    onRetry={fetchCashierSales}
+                />
+            )}
+        </>
     );
 };

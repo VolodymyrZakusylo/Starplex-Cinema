@@ -44,13 +44,24 @@ export const OrderSidebar: React.FC<OrderSidebarProps> = ({
     const calculateTotalPrice = () => {
         const baseTotal = selectedSeats.reduce((sum, seat) => sum + basePrice * (seat.priceMultiplier ?? 1), 0);
         if (discountPercentage > 0) {
-            return baseTotal - Math.round(baseTotal * (discountPercentage / 100));
+            const m = baseTotal * (discountPercentage / 100) * 100;
+            const integerPart = Math.floor(m);
+            const fraction = m - integerPart;
+            let discountAmount;
+
+            if (Math.abs(fraction - 0.5) < 0.00001) {
+                discountAmount = (integerPart % 2 === 0 ? integerPart : integerPart + 1) / 100;
+            } else {
+                discountAmount = Math.round(m) / 100;
+            }
+
+            return Number((baseTotal - discountAmount).toFixed(2));
         }
         return baseTotal;
     };
 
     return (
-        <div className="lg:col-span-1 bg-[#1a1c26] border border-white/5 p-6 rounded-3xl shadow-2xl flex flex-col gap-6 text-xs">
+        <div className="lg:col-span-1 bg-[#1a1c26] border border-white/5 p-6 rounded-3xl shadow-2xl flex flex-col gap-6 text-xs min-w-0">
             <div>
                 <h2 className="text-xl font-black tracking-tight text-white">Ваше замовлення</h2>
                 <p className="text-gray-400 text-xs mt-1">Специфікація обраних квитків StarPlex</p>

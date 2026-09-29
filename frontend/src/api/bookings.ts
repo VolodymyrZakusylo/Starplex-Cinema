@@ -38,7 +38,7 @@ export const bookingsApi = {
     const response = await api.post<BookingResponseDto>('/Bookings/create', {
       sessionId,
       seatIds,
-      discountCode: discountCode || null,
+      promoCode: discountCode || null,
     });
     return response.data;
   },

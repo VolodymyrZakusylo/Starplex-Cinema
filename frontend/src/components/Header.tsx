@@ -33,9 +33,9 @@ export const Header: React.FC = () => {
 
   return (
     <header className="bg-dark-secondary border-b border-white/5 px-6 py-4 sticky top-0 z-50 backdrop-blur-md bg-dark-secondary/90">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
         
-        <div className="flex items-center space-x-6">
+        <div className="flex items-center gap-4 flex-wrap">
           <Link to="/" className="flex items-center space-x-2 cursor-pointer group flex-shrink-0">
             <span className="text-accent-gold text-2xl group-hover:scale-110 transition-transform">★</span>
             <span className="font-bold tracking-wider text-lg">STARPLEX</span>
@@ -60,7 +60,7 @@ export const Header: React.FC = () => {
           )}
         </div>
 
-        <div className="flex items-center space-x-4 flex-shrink-0">
+        <div className="flex items-center gap-3 flex-wrap justify-end flex-shrink-0 ml-auto">
           {isAuthenticated ? (
             <>
               {isAdminOrManager && (
