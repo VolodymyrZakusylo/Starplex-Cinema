@@ -66,6 +66,7 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
             var candidatePendingBookings = await _context.Bookings
                 .Include(b => b.BookingSeats)
                 .Include(b => b.Payment)
+                .Include(b => b.Discount)
                 .Where(b => b.SessionId == request.SessionId &&
                             b.UserId == request.UserId &&
                             b.Status == BookingStatus.Pending)
@@ -101,6 +102,14 @@ public class CreateBookingCommandHandler : IRequestHandler<CreateBookingCommand,
 
             if (reusableBooking != null)
             {
+                string? requestedPromo = string.IsNullOrWhiteSpace(request.PromoCode) ? null : request.PromoCode.Trim().ToLower();
+                string? existingPromo = string.IsNullOrWhiteSpace(reusableBooking.Discount?.Code) ? null : reusableBooking.Discount.Code.Trim().ToLower();
+
+                if (requestedPromo != existingPromo)
+                {
+                    throw new BusinessRuleException("You have an active pending reservation for these seats with a different promo code. Please complete or cancel the existing payment before retrying with a new promo code.");
+                }
+
                 targetBooking = reusableBooking;
                 if (reusableBooking.Payment != null)
                 {

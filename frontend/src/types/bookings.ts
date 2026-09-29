@@ -11,13 +11,15 @@ export interface SeatMapDto {
 }
 
 export interface CashierSaleDto {
-  id: string;
-  bookingCode: string;
-  customerEmail: string;
+  bookingId: string;
+  orderNumber: string;
+  movieTitle: string;
+  sessionStartTime: string;
   totalPrice: number;
   paymentMethod: string;
-  createdAt: string;
-  ticketCount: number;
+  bookingTime: string;
+  status: string;
+  seats: string[];
 }
 
 export interface SignalRSeatsLockedDto {

@@ -58,7 +58,7 @@ export const ScheduleGenerationPanel: React.FC<ScheduleGenerationPanelProps> = (
 
     const handleGenerate = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         const todayStr = getKyivDateString(0);
         if (targetDate < todayStr) {
             setStatusMessage({ type: 'error', text: 'Критична помилка: Заборонено генерувати розклад сеансів на минулу дату.' });
@@ -144,7 +144,7 @@ export const ScheduleGenerationPanel: React.FC<ScheduleGenerationPanelProps> = (
                             <DollarSign className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
                             <input type="number" min={50} max={1000} value={basePrice} onChange={(e) => setBasePrice(Number(e.target.value))} className="w-full bg-[#111219] border border-white/10 rounded-xl pl-10 pr-3 py-2.5 font-bold text-[#ffbd14] focus:outline-none focus:border-[#ffbd14]" />
                         </div>
-                        <span className="text-[10px] text-gray-500 block mt-1.5 leading-relaxed">💡 Бекенд автоматично адаптує ціни: ранок (-20%), прайм-вечір (+25%), пізні сеанси (+10%).</span>
+                        <span className="text-[10px] text-gray-500 block mt-1.5 leading-relaxed"> Система автоматично адаптує ціни: ранок (-20%), прайм-вечір (+25%), пізні сеанси (+10%).</span>
                     </div>
                 </div>
 

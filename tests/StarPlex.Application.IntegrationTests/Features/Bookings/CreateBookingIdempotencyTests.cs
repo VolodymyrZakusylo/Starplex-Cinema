@@ -439,4 +439,246 @@ public class CreateBookingIdempotencyTests : IntegrationTestBase
 
         PaymentServiceMock.Invocations.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task CreateBooking_WithValidPromoCode_AppliesDiscount()
+    {
+        var (cinema, hall, session, seats) = await SeedCinemaSessionWithSeats(1);
+        var userId = Guid.NewGuid();
+        await SeedSelectedSeatLocks(session.Id, new[] { seats[0].Id }, userId);
+
+        var discount = new Discount { Code = "TEST10", Name = "TEST10", Percentage = 10, ValidFrom = DateTime.UtcNow.AddDays(-1), ValidTo = DateTime.UtcNow.AddDays(1), UsageLimit = 100, IsActive = true };
+        DbContext.Discounts.Add(discount);
+        await DbContext.SaveChangesAsync(default);
+
+        PaymentServiceMock
+            .Setup(p => p.CreatePaymentIntentAsync(It.IsAny<Guid>(), It.IsAny<decimal>(), "uah", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("pi_test_123_secret_xyz");
+
+        var command = new CreateBookingCommand
+        {
+            SessionId = session.Id,
+            UserId = userId,
+            SeatIds = new List<Guid> { seats[0].Id },
+            PromoCode = "TEST10"
+        };
+
+        var response = await Mediator.Send(command);
+
+        response.Should().NotBeNull();
+
+        var booking = await DbContext.Bookings
+            .Include(b => b.Payment)
+            .FirstOrDefaultAsync(b => b.Id == response.BookingId);
+
+        booking.Should().NotBeNull();
+        booking!.DiscountId.Should().Be(discount.Id);
+
+        // base price is 200, discount is 10%, so total is 180
+        booking.TotalPrice.Should().Be(180m);
+        response.TotalAmount.Should().Be(180m);
+        booking.Payment.Should().NotBeNull();
+        booking.Payment!.Amount.Should().Be(180m);
+
+        PaymentServiceMock.Verify(p => p.CreatePaymentIntentAsync(
+            booking.Id,
+            180m,
+            "uah",
+            booking.Id.ToString(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateBooking_SequentialDuplicateRequestWithSamePromo_ReusesBooking()
+    {
+        var (cinema, hall, session, seats) = await SeedCinemaSessionWithSeats(1);
+        var userId = Guid.NewGuid();
+        await SeedSelectedSeatLocks(session.Id, new[] { seats[0].Id }, userId);
+
+        var discount = new Discount { Code = "TEST10", Name = "TEST10", Percentage = 10, ValidFrom = DateTime.UtcNow.AddDays(-1), ValidTo = DateTime.UtcNow.AddDays(1), UsageLimit = 100, IsActive = true };
+        DbContext.Discounts.Add(discount);
+        await DbContext.SaveChangesAsync(default);
+
+        PaymentServiceMock
+            .Setup(p => p.CreatePaymentIntentAsync(It.IsAny<Guid>(), It.IsAny<decimal>(), "uah", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("pi_test_123_secret_xyz");
+
+        var command = new CreateBookingCommand
+        {
+            SessionId = session.Id,
+            UserId = userId,
+            SeatIds = new List<Guid> { seats[0].Id },
+            PromoCode = "TEST10"
+        };
+
+        var response1 = await Mediator.Send(command);
+        var response2 = await Mediator.Send(command);
+
+        response2.BookingId.Should().Be(response1.BookingId);
+
+        var bookingsCount = await DbContext.Bookings.CountAsync(b => b.SessionId == session.Id);
+        bookingsCount.Should().Be(1);
+
+        var refreshedDiscount = await DbContext.Discounts.FindAsync(discount.Id);
+        refreshedDiscount!.UsageCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task CreateBooking_SequentialDuplicateRequestWithDifferentPromo_RejectsAndLeavesUnchanged()
+    {
+        var (cinema, hall, session, seats) = await SeedCinemaSessionWithSeats(1);
+        var userId = Guid.NewGuid();
+        await SeedSelectedSeatLocks(session.Id, new[] { seats[0].Id }, userId);
+
+        var discount1 = new Discount { Code = "TEST10", Name = "TEST10", Percentage = 10, ValidFrom = DateTime.UtcNow.AddDays(-1), ValidTo = DateTime.UtcNow.AddDays(1), UsageLimit = 100, IsActive = true };
+        var discount2 = new Discount { Code = "TEST20", Name = "TEST20", Percentage = 20, ValidFrom = DateTime.UtcNow.AddDays(-1), ValidTo = DateTime.UtcNow.AddDays(1), UsageLimit = 100, IsActive = true };
+        DbContext.Discounts.Add(discount1);
+        DbContext.Discounts.Add(discount2);
+        await DbContext.SaveChangesAsync(default);
+
+        PaymentServiceMock
+            .Setup(p => p.CreatePaymentIntentAsync(It.IsAny<Guid>(), It.IsAny<decimal>(), "uah", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("pi_test_123_secret_xyz");
+
+        var command1 = new CreateBookingCommand
+        {
+            SessionId = session.Id,
+            UserId = userId,
+            SeatIds = new List<Guid> { seats[0].Id },
+            PromoCode = "TEST10"
+        };
+
+        var response1 = await Mediator.Send(command1);
+
+        var command2 = new CreateBookingCommand
+        {
+            SessionId = session.Id,
+            UserId = userId,
+            SeatIds = new List<Guid> { seats[0].Id },
+            PromoCode = "TEST20"
+        };
+
+        Func<Task> action = async () => await Mediator.Send(command2);
+        await action.Should().ThrowAsync<BusinessRuleException>().WithMessage("*different promo code*");
+
+        var bookings = await DbContext.Bookings.ToListAsync();
+        bookings.Count.Should().Be(1);
+        bookings.First().DiscountId.Should().Be(discount1.Id);
+        bookings.First().TotalPrice.Should().Be(180m);
+
+        var refreshedDiscount1 = await DbContext.Discounts.FindAsync(discount1.Id);
+        refreshedDiscount1!.UsageCount.Should().Be(1);
+
+        var refreshedDiscount2 = await DbContext.Discounts.FindAsync(discount2.Id);
+        refreshedDiscount2!.UsageCount.Should().Be(0);
+
+        PaymentServiceMock.Verify(p => p.CreatePaymentIntentAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<decimal>(),
+            "uah",
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateBooking_SequentialDuplicateRequestAddingPromo_RejectsAndLeavesUnchanged()
+    {
+        var (cinema, hall, session, seats) = await SeedCinemaSessionWithSeats(1);
+        var userId = Guid.NewGuid();
+        await SeedSelectedSeatLocks(session.Id, new[] { seats[0].Id }, userId);
+
+        var discount = new Discount { Code = "TEST10", Name = "TEST10", Percentage = 10, ValidFrom = DateTime.UtcNow.AddDays(-1), ValidTo = DateTime.UtcNow.AddDays(1), UsageLimit = 100, IsActive = true };
+        DbContext.Discounts.Add(discount);
+        await DbContext.SaveChangesAsync(default);
+
+        PaymentServiceMock
+            .Setup(p => p.CreatePaymentIntentAsync(It.IsAny<Guid>(), It.IsAny<decimal>(), "uah", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("pi_test_123_secret_xyz");
+
+        var command1 = new CreateBookingCommand
+        {
+            SessionId = session.Id,
+            UserId = userId,
+            SeatIds = new List<Guid> { seats[0].Id }
+        };
+
+        var response1 = await Mediator.Send(command1);
+
+        var command2 = new CreateBookingCommand
+        {
+            SessionId = session.Id,
+            UserId = userId,
+            SeatIds = new List<Guid> { seats[0].Id },
+            PromoCode = "TEST10"
+        };
+
+        Func<Task> action = async () => await Mediator.Send(command2);
+        await action.Should().ThrowAsync<BusinessRuleException>().WithMessage("*different promo code*");
+
+        var bookings = await DbContext.Bookings.ToListAsync();
+        bookings.Count.Should().Be(1);
+        bookings.First().DiscountId.Should().BeNull();
+        bookings.First().TotalPrice.Should().Be(200m);
+
+        var refreshedDiscount = await DbContext.Discounts.FindAsync(discount.Id);
+        refreshedDiscount!.UsageCount.Should().Be(0);
+
+        PaymentServiceMock.Verify(p => p.CreatePaymentIntentAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<decimal>(),
+            "uah",
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateBooking_SequentialDuplicateRequestRemovingPromo_RejectsAndLeavesUnchanged()
+    {
+        var (cinema, hall, session, seats) = await SeedCinemaSessionWithSeats(1);
+        var userId = Guid.NewGuid();
+        await SeedSelectedSeatLocks(session.Id, new[] { seats[0].Id }, userId);
+
+        var discount = new Discount { Code = "TEST10", Name = "TEST10", Percentage = 10, ValidFrom = DateTime.UtcNow.AddDays(-1), ValidTo = DateTime.UtcNow.AddDays(1), UsageLimit = 100, IsActive = true };
+        DbContext.Discounts.Add(discount);
+        await DbContext.SaveChangesAsync(default);
+
+        PaymentServiceMock
+            .Setup(p => p.CreatePaymentIntentAsync(It.IsAny<Guid>(), It.IsAny<decimal>(), "uah", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("pi_test_123_secret_xyz");
+
+        var command1 = new CreateBookingCommand
+        {
+            SessionId = session.Id,
+            UserId = userId,
+            SeatIds = new List<Guid> { seats[0].Id },
+            PromoCode = "TEST10"
+        };
+
+        var response1 = await Mediator.Send(command1);
+
+        var command2 = new CreateBookingCommand
+        {
+            SessionId = session.Id,
+            UserId = userId,
+            SeatIds = new List<Guid> { seats[0].Id }
+        };
+
+        Func<Task> action = async () => await Mediator.Send(command2);
+        await action.Should().ThrowAsync<BusinessRuleException>().WithMessage("*different promo code*");
+
+        var bookings = await DbContext.Bookings.ToListAsync();
+        bookings.Count.Should().Be(1);
+        bookings.First().DiscountId.Should().Be(discount.Id);
+        bookings.First().TotalPrice.Should().Be(180m);
+
+        var refreshedDiscount = await DbContext.Discounts.FindAsync(discount.Id);
+        refreshedDiscount!.UsageCount.Should().Be(1);
+
+        PaymentServiceMock.Verify(p => p.CreatePaymentIntentAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<decimal>(),
+            "uah",
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 }
